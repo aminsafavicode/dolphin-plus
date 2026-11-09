@@ -1381,7 +1381,7 @@ html[data-theme="dark"] #content a.df-sidebar-link:hover {
                             <span>⏱️</span>
                             <span>زمان‌بندی‌های خودکار</span>
                         </h3>
-                        <a href="/admin/backup/backupschedule/add/" class="df-icon-btn download" style="font-size: 11.5px; padding: 3px 8px;">
+                        <a href="{% url 'admin:backup_backupschedule_add' %}" class="df-icon-btn download" style="font-size: 11.5px; padding: 3px 8px;">
                             + جدید
                         </a>
                     </div>
@@ -1416,7 +1416,7 @@ html[data-theme="dark"] #content a.df-sidebar-link:hover {
                             <span>🌐</span>
                             <span>مقاصد ذخیره‌سازی ابری / شبکه</span>
                         </h3>
-                        <a href="/admin/backup/backupstoragedestination/add/" class="df-icon-btn download" style="font-size: 11.5px; padding: 3px 8px;">
+                        <a href="{% url 'admin:backup_backupstoragedestination_add' %}" class="df-icon-btn download" style="font-size: 11.5px; padding: 3px 8px;">
                             + جدید
                         </a>
                     </div>

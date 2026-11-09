@@ -99,8 +99,9 @@
             if (!modelId) return;
 
             try {
+                const adminPrefix = window.location.pathname.startsWith('/djangoadmin') ? '/djangoadmin' : '/admin';
                 const url = new URL(
-                    "/admin/workflow/form-workspace/model-fields/",
+                    `${adminPrefix}/workflow/form-workspace/model-fields/`,
                     window.location.origin
                 );
                 url.searchParams.set("content_type", modelId);

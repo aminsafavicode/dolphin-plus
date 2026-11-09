@@ -14,7 +14,7 @@ def dolphin_flow_admin_context(request):
         "devices_count": 0,
         "backups_count": 0,
     }
-    if request.path.startswith("/admin/"):
+    if request.path.startswith("/djangoadmin/") or request.path.startswith("/admin/"):
         try:
             from workflow.models import Workflow, FormDefinition, Device
             from repairs.models import RepairDevice

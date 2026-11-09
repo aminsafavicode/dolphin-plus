@@ -101,8 +101,9 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        const adminPrefix = window.location.pathname.startsWith('/djangoadmin') ? '/djangoadmin' : '/admin';
         const response = await fetch(
-            `/admin/workflow/dynamic/formfield-model-fields/?content_type=${id}`
+            `${adminPrefix}/workflow/dynamic/formfield-model-fields/?content_type=${id}`
         );
 
         if (!response.ok) {

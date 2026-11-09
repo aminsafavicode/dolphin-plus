@@ -138,35 +138,38 @@
             const fromStep = getField("id_from_step");
             const toStep = getField("id_to_step");
 
+            const adminPrefix = window.location.pathname.startsWith('/djangoadmin') ? '/djangoadmin' : '/admin';
+
             loadField(
                 "id_from_step",
-                "/admin/workflow/dynamic/steps/",
+                `${adminPrefix}/workflow/dynamic/steps/`,
                 workflowId,
                 preserveValues && fromStep ? fromStep.value : ""
             );
 
             loadField(
                 "id_to_step",
-                "/admin/workflow/dynamic/steps/",
+                `${adminPrefix}/workflow/dynamic/steps/`,
                 workflowId,
                 preserveValues && toStep ? toStep.value : ""
             );
         }
 
         if (isPermissionForm()) {
+            const adminPrefix = window.location.pathname.startsWith('/djangoadmin') ? '/djangoadmin' : '/admin';
             const step = getField("id_step");
             const transition = getField("id_transition");
 
             loadField(
                 "id_step",
-                "/admin/workflow/dynamic/steps/",
+                `${adminPrefix}/workflow/dynamic/steps/`,
                 workflowId,
                 preserveValues && step ? step.value : ""
             );
 
             loadField(
                 "id_transition",
-                "/admin/workflow/dynamic/transitions/",
+                `${adminPrefix}/workflow/dynamic/transitions/`,
                 workflowId,
                 preserveValues && transition ? transition.value : ""
             );
