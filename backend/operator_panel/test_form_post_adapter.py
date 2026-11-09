@@ -1,0 +1,769 @@
+from django.core.exceptions import ValidationError
+from django.http import QueryDict
+from django.test import TestCase
+
+from operator_panel.form_post_adapter import OperatorPanelFormPostAdapter
+from workflow.models import (
+    FormDefinition,
+    FormField,
+    FormRepeatableGroup,
+    FormSection,
+    InstanceDevice,
+    RepeatableRow,
+    Workflow,
+    WorkflowInstance,
+)
+
+
+class FormPostAdapterTests(TestCase):
+    def setUp(self):
+        self.workflow = Workflow.objects.create(name="Adapter Workflow", code="ADAPTER_WF")
+        self.form = FormDefinition.objects.create(workflow=self.workflow, name="Adapter Form")
+        self.section = FormSection.objects.create(
+            form=self.form, name="Adapter Section", code="ADAPTER_SECTION", order=1,
+        )
+        FormField.objects.create(
+            section=self.section, name="Name", code="name", label="Name",
+            field_type=FormField.FieldType.TEXT,
+        )
+        self.group = FormRepeatableGroup.objects.create(
+            section=self.section, name="Items", code="items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL, order=1,
+        )
+        FormField.objects.create(
+            section=self.section, repeatable_group=self.group,
+            name="Title", code="title", label="Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        FormField.objects.create(
+            section=self.section, repeatable_group=self.group,
+            name="Enabled", code="enabled", label="Enabled",
+            field_type=FormField.FieldType.BOOLEAN,
+            order=1,
+        )
+
+    def test_adapts_normal_field_and_repeatable_rows(self):
+        post = QueryDict("", mutable=True)
+        post.update({
+            "name": "Ehsan",
+            "items_0_title": "First",
+            "items_1_title": "Second",
+            "items_1__id": "12",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+
+        self.assertEqual(payload, {
+            "name": "Ehsan",
+            "items": [
+                {"title": "First"},
+                {"title": "Second", "row_id": 12},
+            ],
+        })
+
+    def test_normal_boolean_values_are_normalized(self):
+        post = QueryDict("", mutable=True)
+        post.setlist("enabled_normal", ["false", "on"])
+
+        boolean_field = FormField.objects.create(
+            section=self.section,
+            name="Normal Enabled",
+            code="enabled_normal",
+            label="Normal Enabled",
+            field_type=FormField.FieldType.BOOLEAN,
+            order=2,
+        )
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertTrue(payload["enabled_normal"])
+
+        post.setlist("enabled_normal", ["false"])
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertFalse(payload["enabled_normal"])
+
+    def test_omitted_normal_field_and_group_remain_omitted(self):
+        post = QueryDict("", mutable=True)
+        post["name"] = "Ehsan"
+
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+
+        self.assertEqual(payload, {"name": "Ehsan"})
+
+    def test_new_row_uuid_is_treated_as_create(self):
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "New",
+            "items_0__id": "c43e58e0-8c7f-403f-b1e6-02469b448f02",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+
+        self.assertEqual(payload["items"], [{"title": "New", "row_id": None}])
+
+    def test_boolean_values_are_normalized(self):
+        post = QueryDict("", mutable=True)
+        post.setlist("items_0_enabled", ["false", "on"])
+        post.setlist("items_1_enabled", ["false"])
+
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+
+        self.assertEqual(payload["items"], [
+            {"enabled": True},
+            {"enabled": False},
+        ])
+
+    def test_repeatable_group_with_no_rows_is_not_created_from_missing_post_keys(self):
+        post = QueryDict("", mutable=True)
+        post["name"] = "Ehsan"
+
+        payload = OperatorPanelFormPostAdapter.adapt(form=self.form, submitted_data=post)
+
+        self.assertNotIn("items", payload)
+
+    def test_repeatable_group_presence_marker_allows_explicit_empty_delete(self):
+        post = QueryDict("", mutable=True)
+        post["name"] = "Ehsan"
+        post["items__present"] = "1"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["items"], [])
+
+
+    def test_adapts_nested_repeatable_rows_into_child_groups(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Parent",
+            "items_0_child_items_0_child_title": "First child",
+            "items_0_child_items_1_child_title": "Second child",
+            "items_0_child_items_1__id": "21",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "Parent",
+                    "child_items": [
+                        {
+                            "child_title": "First child",
+                        },
+                        {
+                            "child_title": "Second child",
+                            "row_id": 21,
+                        },
+                    ],
+                },
+            ],
+        )
+
+
+    def test_nested_presence_marker_allows_explicit_empty_child_group(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Parent",
+            "items_0_child_items__present": "1",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "Parent",
+                    "child_items": [],
+                },
+            ],
+        )
+
+
+    def test_nested_rows_keep_parent_context_when_child_indexes_repeat(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Parent 1",
+            "items_0_child_items_0_child_title": "P1 child",
+            "items_1_title": "Parent 2",
+            "items_1_child_items_0_child_title": "P2 child",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "Parent 1",
+                    "child_items": [{"child_title": "P1 child"}],
+                },
+                {
+                    "title": "Parent 2",
+                    "child_items": [{"child_title": "P2 child"}],
+                },
+            ],
+        )
+
+
+    def test_adapts_parent_child_grandchild_rows_without_losing_context(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchild Items",
+            code="grandchild_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=3,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Grandchild Title",
+            code="grandchild_title",
+            label="Grandchild Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Parent",
+            "items_0_child_items_0_child_title": "Child",
+            "items_0_child_items_0_grandchild_items_0_grandchild_title": "Grandchild",
+            "items_0_child_items_0_grandchild_items_0__id": "31",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "Parent",
+                    "child_items": [
+                        {
+                            "child_title": "Child",
+                            "grandchild_items": [
+                                {
+                                    "grandchild_title": "Grandchild",
+                                    "row_id": 31,
+                                },
+                            ],
+                        },
+                    ],
+                },
+            ],
+        )
+
+    def test_nested_payload_uses_group_codes_without_child_groups_wrapper(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post["items_0_title"] = "Parent"
+        post["items_0_child_items_0_child_title"] = "Child"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"][0]["child_items"],
+            [{"child_title": "Child"}],
+        )
+        self.assertNotIn("child_groups", payload["items"][0])
+
+
+    def test_canonical_row_id_is_not_overwritten_by_instance_device_fallback(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices_canonical",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="Label",
+            code="label_canonical",
+            label="Label",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=instance,
+        )
+        RepeatableRow.objects.create(
+            instance=instance,
+            group=device_group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+        canonical_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=device_group,
+            row_order=1,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "devices_canonical_0_label_canonical": "Canonical row",
+            "devices_canonical_0__id": str(canonical_row.pk),
+            "devices_canonical_0_instance_device_id": str(instance_device.pk),
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+            instance=instance,
+        )
+
+        self.assertEqual(
+            payload["devices_canonical"],
+            [
+                {
+                    "label_canonical": "Canonical row",
+                    "row_id": canonical_row.pk,
+                }
+            ],
+        )
+
+    def test_existing_device_instance_id_is_resolved_to_repeatable_row_id(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="Devices",
+            code="devices",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="Label",
+            code="label",
+            label="Label",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+        instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+        )
+        instance_device = InstanceDevice.objects.create(
+            instance=instance,
+        )
+        row = RepeatableRow.objects.create(
+            instance=instance,
+            group=device_group,
+            instance_device=instance_device,
+            row_order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "devices_0_label": "Existing device",
+            "devices_0_instance_device_id": str(instance_device.pk),
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+            instance=instance,
+        )
+
+        self.assertEqual(
+            payload["devices"],
+            [
+                {
+                    "label": "Existing device",
+                    "row_id": row.pk,
+                }
+            ],
+        )
+
+
+    def test_two_root_rows_keep_independent_values_when_one_root_has_child_rows(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Address",
+            code="address",
+            label="Address",
+            field_type=FormField.FieldType.TEXTAREA,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "آقایی",
+            "items_1_title": "صمدی",
+            "items_1_child_items_0_address": "آدرس صمدی",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {"title": "آقایی"},
+                {
+                    "title": "صمدی",
+                    "child_items": [{"address": "آدرس صمدی"}],
+                },
+            ],
+        )
+
+        self.assertIsInstance(payload["items"][0]["title"], str)
+        self.assertIsInstance(payload["items"][1]["title"], str)
+
+    def test_two_root_rows_each_keep_their_field_and_child_values(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "آقایی",
+            "items_0_child_items_0_child_title": "فرزند آقایی",
+            "items_1_title": "صمدی",
+            "items_1_child_items_0_child_title": "فرزند صمدی",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            payload["items"],
+            [
+                {
+                    "title": "آقایی",
+                    "child_items": [{"child_title": "فرزند آقایی"}],
+                },
+                {
+                    "title": "صمدی",
+                    "child_items": [{"child_title": "فرزند صمدی"}],
+                },
+            ],
+        )
+        self.assertEqual(
+            [row["title"] for row in payload["items"]],
+            ["آقایی", "صمدی"],
+        )
+        self.assertEqual(
+            [
+                row["child_items"][0]["child_title"]
+                for row in payload["items"]
+            ],
+            ["فرزند آقایی", "فرزند صمدی"],
+        )
+
+    def test_child_row_cannot_change_sibling_root_field_payload(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="child_items",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            order=2,
+        )
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="Child Title",
+            code="child_title",
+            label="Child Title",
+            field_type=FormField.FieldType.TEXT,
+            order=0,
+        )
+
+        post = QueryDict("", mutable=True)
+        post.update({
+            "items_0_title": "Root 0",
+            "items_1_title": "Root 1",
+            "items_0_child_items_0_child_title": "Child of root 0",
+            "items_1_child_items_0_child_title": "Child of root 1",
+        })
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(
+            [row["title"] for row in payload["items"]],
+            ["Root 0", "Root 1"],
+        )
+        self.assertEqual(
+            payload["items"][0]["child_items"],
+            [{"child_title": "Child of root 0"}],
+        )
+        self.assertEqual(
+            payload["items"][1]["child_items"],
+            [{"child_title": "Child of root 1"}],
+        )
+    def test_normal_jalali_date_is_converted_to_canonical_gregorian(self):
+        field = FormField.objects.create(
+            section=self.section,
+            name="Date",
+            code="date",
+            label="Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            order=3,
+        )
+        post = QueryDict("", mutable=True)
+        post["date"] = "۱۴۰۵/۰۷/۰۵"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["date"], "2026-09-27")
+
+    def test_normal_jalali_datetime_is_converted_to_canonical_gregorian(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Date Time",
+            code="date_time",
+            label="Date Time",
+            field_type=FormField.FieldType.DATETIME,
+            calendar=FormField.Calendar.JALALI,
+            order=4,
+        )
+        post = QueryDict("", mutable=True)
+        post["date_time"] = "۱۴۰۵/۰۷/۰۵ 14:30:00"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["date_time"], "2026-09-27T14:30:00")
+
+    def test_repeatable_jalali_date_is_converted_to_canonical_gregorian(self):
+        FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="Date",
+            code="date",
+            label="Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            order=2,
+        )
+        post = QueryDict("", mutable=True)
+        post["items_0_date"] = "۱۴۰۵/۰۷/۰۵"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["items"], [{"date": "2026-09-27"}])
+
+    def test_invalid_jalali_date_raises_validation_error(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Date",
+            code="date",
+            label="Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.JALALI,
+            order=3,
+        )
+        post = QueryDict("", mutable=True)
+        post["date"] = "۱۴۰۵/۰۷/۳۲"
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "مقدار فیلد «Date» باید تاریخ معتبر باشد.",
+        ):
+            OperatorPanelFormPostAdapter.adapt(
+                form=self.form,
+                submitted_data=post,
+            )
+
+    def test_invalid_jalali_datetime_raises_validation_error(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Date Time",
+            code="date_time",
+            label="Date Time",
+            field_type=FormField.FieldType.DATETIME,
+            calendar=FormField.Calendar.JALALI,
+            order=4,
+        )
+        post = QueryDict("", mutable=True)
+        post["date_time"] = "۱۴۰۵/۰۷/۳۲ 14:30:00"
+
+        with self.assertRaisesMessage(
+            ValidationError,
+            "مقدار فیلد «Date Time» باید تاریخ و زمان معتبر باشد.",
+        ):
+            OperatorPanelFormPostAdapter.adapt(
+                form=self.form,
+                submitted_data=post,
+            )
+
+    def test_gregorian_date_remains_canonical(self):
+        FormField.objects.create(
+            section=self.section,
+            name="Date",
+            code="date",
+            label="Date",
+            field_type=FormField.FieldType.DATE,
+            calendar=FormField.Calendar.GREGORIAN,
+            order=3,
+        )
+        post = QueryDict("", mutable=True)
+        post["date"] = "2026-09-27"
+
+        payload = OperatorPanelFormPostAdapter.adapt(
+            form=self.form,
+            submitted_data=post,
+        )
+
+        self.assertEqual(payload["date"], "2026-09-27")
+

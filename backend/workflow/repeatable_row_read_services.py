@@ -1,0 +1,630 @@
+from collections import defaultdict
+
+from django.core.exceptions import ValidationError
+
+from .date_field_services import DateFieldService
+from .models import (
+    DeviceIdentifier,
+    FormField,
+    FormRepeatableGroup,
+    InstanceDevice,
+    RepeatableRow,
+    WorkflowInstance,
+)
+
+
+class RepeatableRowReadService:
+    """
+    Read/reconstruction layer for the new RepeatableRow domain.
+
+    This service is deliberately independent from DynamicFormService and
+    does not read or write FormData.data. It reconstructs the canonical
+    row structure from RepeatableRow + RepeatableRowValue and resolves
+    DEVICE system fields from InstanceDevice.
+    """
+
+    @staticmethod
+    def get_rows(*, instance, group, parent_row=None):
+        if instance is None or instance.pk is None:
+            raise ValidationError("WorkflowInstance معتبر نیست.")
+
+        if group is None or group.pk is None:
+            raise ValidationError("RepeatableGroup معتبر نیست.")
+
+        if group.section.form.workflow_id != instance.workflow_id:
+            raise ValidationError(
+                "گروه تکرارشونده و WorkflowInstance باید متعلق به یک Workflow باشند."
+            )
+
+        if parent_row is not None and parent_row.instance_id != instance.pk:
+            raise ValidationError(
+                "Row والد باید متعلق به همان WorkflowInstance باشد."
+            )
+
+        return (
+            RepeatableRow.objects
+            .filter(
+                instance=instance,
+                group=group,
+                parent_row=parent_row,
+            )
+            .select_related(
+                "group",
+                "instance_device",
+                "instance_device__device",
+                "instance_device__device__device_model",
+                "instance_device__device__device_model__device_type",
+                "instance_device__draft_device_model",
+                "instance_device__draft_device_type",
+            )
+            .prefetch_related(
+                "group__fields__choice_model",
+                "instance_device__device__identifiers",
+                "values__field__choice_model",
+                "values__static_choice_item",
+                "values__lookup_item",
+            )
+            .order_by("row_order", "id")
+        )
+
+    @staticmethod
+    def get_rows_by_group_parent(*, instance, groups):
+        """Load repeatable rows for multiple groups in one prefetched query."""
+        if instance is None or instance.pk is None:
+            raise ValidationError("WorkflowInstance معتبر نیست.")
+
+        groups = list(groups)
+        if not groups:
+            return {}
+
+        group_ids = []
+        for group in groups:
+            if group is None or group.pk is None:
+                raise ValidationError("RepeatableGroup معتبر نیست.")
+            if group.section.form.workflow_id != instance.workflow_id:
+                raise ValidationError(
+                    "گروه تکرارشونده و WorkflowInstance باید متعلق به یک Workflow باشند."
+                )
+            group_ids.append(group.pk)
+
+        rows = (
+            RepeatableRow.objects
+            .filter(
+                instance=instance,
+                group_id__in=group_ids,
+            )
+            .select_related(
+                "group",
+                "instance_device",
+                "instance_device__device",
+                "instance_device__device__device_model",
+                "instance_device__device__device_model__device_type",
+                "instance_device__draft_device_model",
+                "instance_device__draft_device_type",
+            )
+            .prefetch_related(
+                "group__fields__choice_model",
+                "instance_device__device__identifiers",
+                "values__field__choice_model",
+                "values__static_choice_item",
+                "values__lookup_item",
+            )
+            .order_by("group_id", "parent_row_id", "row_order", "id")
+        )
+
+        rows_by_group_parent = defaultdict(list)
+        for row in rows:
+            rows_by_group_parent[(row.group_id, row.parent_row_id)].append(row)
+
+        return dict(rows_by_group_parent)
+
+    @staticmethod
+    def get_rows_by_instance_group_parent(*, instances, groups):
+        """Load repeatable rows for multiple instances and groups in one query."""
+        instances = list(instances)
+        groups = list(groups)
+        if not instances or not groups:
+            return {}
+
+        instance_ids = []
+        workflow_ids = set()
+        for instance in instances:
+            if instance is None or instance.pk is None:
+                raise ValidationError("WorkflowInstance معتبر نیست.")
+            instance_ids.append(instance.pk)
+            workflow_ids.add(instance.workflow_id)
+
+        group_ids = []
+        for group in groups:
+            if group is None or group.pk is None:
+                raise ValidationError("RepeatableGroup معتبر نیست.")
+            group_workflow_id = group.section.form.workflow_id
+            if group_workflow_id not in workflow_ids:
+                raise ValidationError(
+                    "گروه تکرارشونده و WorkflowInstance باید متعلق به همان Workflow باشند."
+                )
+            group_ids.append(group.pk)
+
+        rows = (
+            RepeatableRow.objects
+            .filter(
+                instance_id__in=instance_ids,
+                group_id__in=group_ids,
+            )
+            .select_related(
+                "group",
+                "instance_device",
+                "instance_device__device",
+                "instance_device__device__device_model",
+                "instance_device__device__device_model__device_type",
+                "instance_device__draft_device_model",
+                "instance_device__draft_device_type",
+            )
+            .prefetch_related(
+                "group__fields__choice_model",
+                "instance_device__device__identifiers",
+                "values__field__choice_model",
+                "values__static_choice_item",
+                "values__lookup_item",
+            )
+            .order_by(
+                "instance_id",
+                "group_id",
+                "parent_row_id",
+                "row_order",
+                "id",
+            )
+        )
+
+        rows_by_instance_group_parent = defaultdict(list)
+        for row in rows:
+            rows_by_instance_group_parent[
+                (row.instance_id, row.group_id, row.parent_row_id)
+            ].append(row)
+
+        return dict(rows_by_instance_group_parent)
+
+    @staticmethod
+    def reconstruct_row(*, row):
+        if row is None or row.pk is None:
+            raise ValidationError("RepeatableRow معتبر نیست.")
+
+        row = (
+            RepeatableRow.objects
+            .filter(pk=row.pk)
+            .select_related(
+                "instance",
+                "group",
+                "instance_device",
+                "instance_device__device",
+                "instance_device__device__device_model",
+                "instance_device__device__device_model__device_type",
+                "instance_device__draft_device_model",
+                "instance_device__draft_device_type",
+            )
+            .prefetch_related(
+                "instance_device__device__identifiers",
+                "values__field",
+                "values__static_choice_item",
+                "values__lookup_item",
+            )
+            .first()
+        )
+
+        if row is None:
+            raise ValidationError("RepeatableRow پیدا نشد.")
+
+        values_by_field_id = {
+            item.field_id: item
+            for item in row.values.all()
+        }
+
+        fields = []
+
+        for field in sorted(
+            (field for field in row.group.fields.all() if field.is_active),
+            key=lambda field: (field.order, field.id),
+        ):
+            if field.system_key != FormField.SystemKey.NONE:
+                value, display_value = (
+                    RepeatableRowReadService._system_value(
+                        row=row,
+                        field=field,
+                    )
+                )
+            else:
+                value_object = values_by_field_id.get(field.pk)
+                value, display_value = (
+                    RepeatableRowReadService._custom_value(
+                        field=field,
+                        value_object=value_object,
+                    )
+                )
+
+            fields.append(
+                {
+                    "code": field.code,
+                    "label": field.label,
+                    "field_type": field.field_type,
+                    "value": value,
+                    "display_value": display_value,
+                    "system_key": field.system_key,
+                }
+            )
+
+        return {
+            "row_id": row.pk,
+            "row_order": row.row_order,
+            "parent_row_id": row.parent_row_id,
+            "instance_device_id": row.instance_device_id,
+            "fields": fields,
+        }
+
+    @staticmethod
+    def reconstruct_group(
+        *,
+        instance,
+        group,
+        parent_row=None,
+    ):
+        rows = RepeatableRowReadService.get_rows(
+            instance=instance,
+            group=group,
+            parent_row=parent_row,
+        )
+
+        child_groups = list(
+            group.child_groups.filter(
+                is_active=True,
+            ).order_by("order", "id")
+        )
+
+        items = []
+
+        for row in rows:
+            item = RepeatableRowReadService._reconstruct_prefetched_row(
+                row=row,
+            )
+            item["child_groups"] = [
+                RepeatableRowReadService.reconstruct_group(
+                    instance=instance,
+                    group=child_group,
+                    parent_row=row,
+                )
+                for child_group in child_groups
+            ]
+            items.append(item)
+
+        return {
+            "code": group.code,
+            "name": group.name,
+            "group_id": group.pk,
+            "group_type": group.group_type,
+            "display_type": group.display_type,
+            "parent_group_id": group.parent_group_id,
+            "items": items,
+        }
+
+    @staticmethod
+    def reconstruct_instance(*, instance):
+        if instance is None or instance.pk is None:
+            raise ValidationError("WorkflowInstance معتبر نیست.")
+
+        groups = (
+            FormRepeatableGroup.objects
+            .filter(
+                section__form__workflow=instance.workflow,
+                parent_group__isnull=True,
+                is_active=True,
+            )
+            .select_related("section", "section__form")
+            .order_by(
+                "section__order",
+                "order",
+                "id",
+            )
+        )
+
+        return {
+            "instance_id": instance.pk,
+            "groups": [
+                RepeatableRowReadService.reconstruct_group(
+                    instance=instance,
+                    group=group,
+                )
+                for group in groups
+            ],
+        }
+
+    @staticmethod
+    def _reconstruct_prefetched_row(*, row):
+        values_by_field_id = {
+            item.field_id: item
+            for item in row.values.all()
+        }
+
+        fields = []
+
+        for field in sorted(
+            (field for field in row.group.fields.all() if field.is_active),
+            key=lambda field: (field.order, field.id),
+        ):
+            if field.system_key != FormField.SystemKey.NONE:
+                value, display_value = (
+                    RepeatableRowReadService._system_value(
+                        row=row,
+                        field=field,
+                    )
+                )
+            else:
+                value_object = values_by_field_id.get(field.pk)
+                value, display_value = (
+                    RepeatableRowReadService._custom_value(
+                        field=field,
+                        value_object=value_object,
+                    )
+                )
+
+            fields.append(
+                {
+                    "code": field.code,
+                    "label": field.label,
+                    "field_type": field.field_type,
+                    "value": value,
+                    "display_value": display_value,
+                    "system_key": field.system_key,
+                }
+            )
+
+        return {
+            "row_id": row.pk,
+            "row_order": row.row_order,
+            "parent_row_id": row.parent_row_id,
+            "instance_device_id": row.instance_device_id,
+            "fields": fields,
+        }
+
+    @staticmethod
+    def build_model_reference_cache(*, rows):
+        """Resolve MODEL SELECT references in batches for prefetched rows."""
+        rows = list(rows)
+        references_by_config = defaultdict(set)
+        fields_by_config = {}
+
+        for row in rows:
+            values_by_field_id = {
+                item.field_id: item
+                for item in row.values.all()
+            }
+            for field in row.group.fields.all():
+                if (
+                    not field.is_active
+                    or field.field_type != FormField.FieldType.SELECT
+                    or field.choice_source != FormField.ChoiceSource.MODEL
+                    or not field.choice_model_id
+                ):
+                    continue
+
+                value_object = values_by_field_id.get(field.pk)
+                reference_id = (
+                    value_object.reference_id
+                    if value_object is not None
+                    else None
+                )
+                if not reference_id:
+                    continue
+
+                config = (
+                    field.choice_model_id,
+                    field.choice_value_field,
+                    field.choice_label_field,
+                )
+                references_by_config[config].add(reference_id)
+                fields_by_config[config] = field
+
+        cache = {}
+
+        for config, reference_ids in references_by_config.items():
+            field = fields_by_config[config]
+            model_class = field.choice_model.model_class()
+            if model_class is None:
+                continue
+
+            value_field = field.choice_value_field
+            label_field = field.choice_label_field
+            objects = (
+                model_class.objects
+                .filter(**{f"{value_field}__in": reference_ids})
+                .order_by("pk")
+                .values(value_field, label_field)
+            )
+
+            for obj in objects:
+                key = (field.pk, obj[value_field])
+                cache.setdefault(key, str(obj[label_field]))
+
+        return cache
+
+    @staticmethod
+    def _custom_value(*, field, value_object, model_reference_cache=None):
+        if value_object is None:
+            return None, ""
+
+        if field.field_type in (
+            FormField.FieldType.TEXT,
+            FormField.FieldType.TEXTAREA,
+        ):
+            return value_object.text_value, value_object.text_value or ""
+
+        if field.field_type == FormField.FieldType.NUMBER:
+            value = value_object.decimal_value
+            if value is None:
+                return None, ""
+
+            # RepeatableRowValue stores NUMBER values with six database
+            # decimal places. Presentation must follow the FormField
+            # configuration instead of exposing the storage precision.
+            from decimal import Decimal
+
+            try:
+                places = field.decimal_places
+                formatted = f"{Decimal(str(value)):.{places}f}"
+                if "." in formatted:
+                    formatted = formatted.rstrip("0").rstrip(".")
+                return value, formatted
+            except (ArithmeticError, ValueError, TypeError):
+                return value, str(value)
+
+        if field.field_type == FormField.FieldType.DATE:
+            value = value_object.date_value
+            if value is None:
+                return None, ""
+            display_value = DateFieldService.to_display_date(
+                value,
+                calendar=field.calendar,
+            )
+            return display_value, display_value
+
+        if field.field_type == FormField.FieldType.DATETIME:
+            value = value_object.datetime_value
+            if value is None:
+                return None, ""
+            display_value = DateFieldService.to_display_datetime(
+                value,
+                calendar=field.calendar,
+            )
+            return display_value, display_value
+
+        if field.field_type == FormField.FieldType.BOOLEAN:
+            value = value_object.boolean_value
+            if value is None:
+                return None, ""
+            return value, "بله" if value else "خیر"
+
+        if field.field_type == FormField.FieldType.SELECT:
+            if field.choice_source == FormField.ChoiceSource.STATIC:
+                item = value_object.static_choice_item
+                return (
+                    item.value if item else None,
+                    item.label if item else "",
+                )
+
+            if field.choice_source == FormField.ChoiceSource.LOOKUP:
+                item = value_object.lookup_item
+                return (
+                    item.value if item else None,
+                    item.label if item else "",
+                )
+
+            if field.choice_source == FormField.ChoiceSource.MODEL:
+                return (
+                    RepeatableRowReadService._model_reference_value(
+                        field=field,
+                        reference_id=value_object.reference_id,
+                        model_reference_cache=model_reference_cache,
+                    )
+                )
+
+        raise ValidationError(
+            f"نوع فیلد «{field.field_type}» برای reconstruction پشتیبانی نمی‌شود."
+        )
+
+    @staticmethod
+    def _model_reference_value(
+        *,
+        field,
+        reference_id,
+        model_reference_cache=None,
+    ):
+        if not reference_id or not field.choice_model_id:
+            return reference_id, ""
+
+        if model_reference_cache is not None:
+            label = model_reference_cache.get((field.pk, reference_id))
+            return reference_id, label or ""
+
+        model_class = field.choice_model.model_class()
+        if model_class is None:
+            return reference_id, ""
+
+        obj = model_class.objects.filter(
+            **{field.choice_value_field: reference_id}
+        ).first()
+
+        if obj is None:
+            return reference_id, ""
+
+        label = getattr(
+            obj,
+            field.choice_label_field,
+            "",
+        )
+
+        return reference_id, str(label)
+
+    @staticmethod
+    def _system_value(*, row, field):
+        instance_device = row.instance_device
+
+        if instance_device is None:
+            return None, ""
+
+        key = field.system_key
+
+        if key == FormField.SystemKey.IMEI:
+            if instance_device.device_id:
+                identifier = (
+                    instance_device.device
+                    .identifiers
+                    .filter(
+                        identifier_type=(
+                            DeviceIdentifier.IdentifierType.IMEI
+                        )
+                    )
+                    .first()
+                )
+                value = identifier.value if identifier else ""
+                return value, value
+
+            value = instance_device.draft_imei or ""
+            return value, value
+
+        if key == FormField.SystemKey.DEVICE_TYPE:
+            if instance_device.device_id:
+                obj = (
+                    instance_device.device
+                    .device_model
+                    .device_type
+                )
+            else:
+                obj = instance_device.draft_device_type
+
+            return (
+                obj.pk if obj else None,
+                str(obj) if obj else "",
+            )
+
+        if key == FormField.SystemKey.DEVICE_MODEL:
+            if instance_device.device_id:
+                obj = instance_device.device.device_model
+            else:
+                obj = instance_device.draft_device_model
+
+            return (
+                obj.pk if obj else None,
+                str(obj) if obj else "",
+            )
+
+        mapping = {
+            FormField.SystemKey.REPORTED_PROBLEM: "reported_problem",
+            FormField.SystemKey.DESCRIPTION: "description",
+            FormField.SystemKey.WARRANTY_STATUS: "warranty_status",
+            FormField.SystemKey.STATUS: "status",
+        }
+
+        attribute = mapping.get(key)
+        if attribute is None:
+            return None, ""
+
+        value = getattr(instance_device, attribute, "")
+        return value, value or ""

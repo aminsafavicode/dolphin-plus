@@ -1,0 +1,1049 @@
+{% extends "operator_panel/base.html" %} {% block content %} {% if messages %}
+<div class="df-messages">
+  {% for message in messages %}
+  <div class="df-message df-message-{{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<div class="workflow-instance">
+  <div class="df-instance-header">
+    <div class="df-instance-title-group">
+      <div class="df-instance-badges">
+        <span class="df-status df-status-{% if instance.status == 'COMPLETED' %}success{% elif instance.status == 'CANCELLED' or instance.status == 'REJECTED' %}danger{% elif instance.status == 'ACTIVE' %}info{% else %}secondary{% endif %}">
+          {{ instance.get_status_display }}
+        </span>
+        {% if instance.current_step %}
+          <span class="df-step-badge">
+            مرحله فعلی: <strong>{{ instance.current_step.name }}</strong>
+          </span>
+        {% endif %}
+      </div>
+      <h1 class="df-instance-title">{{ instance.workflow.name }}</h1>
+      <div class="df-instance-meta-row">
+        <span>شماره فرم: <strong>{{ instance.form_number }}</strong></span>
+        <span>•</span>
+        <span>تاریخ ایجاد: <strong>{{ instance.started_at|date:"Y/m/d - H:i" }}</strong></span>
+      </div>
+    </div>
+
+    <div class="df-instance-actions-toolbar">
+      <a
+        href="{% url 'operator_panel:form_print_preview' instance.pk %}"
+        class="df-button df-button-secondary df-print-preview-button"
+        target="_blank"
+        rel="noopener"
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        پیش‌نمایش چاپ
+      </a>
+      {% if not pending_acceptance and not dynamic_form.is_submitted and dynamic_form.has_saved_data and dynamic_form.can_reenter_edit_mode and not edit_mode %}
+        <a href="?edit=1" class="df-button df-button-primary">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          ویرایش اطلاعات
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if pending_acceptance %}
+  <div class="df-message df-message-info">
+    این فرآیند در انتظار تأیید دریافت است. اطلاعات زیر فقط برای بررسی مورد نمایش داده می‌شود.
+  </div>
+  {% endif %}
+
+  {% if no_longer_my_task %}
+  <div class="df-message df-message-info">
+    این فرآیند به مرحله «{{ instance.current_step.name }}» ارسال شده است و از لیست وظایف شما خارج گردیده است.
+  </div>
+
+{% elif dynamic_form %}
+
+  <form
+    method="post"
+    action="{% url 'operator_panel:workflow_instance' instance.pk %}{% if edit_mode %}?edit=1{% endif %}"
+    data-instance-id="{{ instance.pk }}"
+    data-step-id="{{ instance.current_step_id|default:'' }}"
+    data-share-url="{% url 'operator_panel:file_share_inbox' %}"
+    data-edit-mode="{{ edit_mode|yesno:'1,0' }}"
+    {% if pending_acceptance %}data-pending-acceptance-id="{{ request.resolver_match.kwargs.transition_execution_id }}"{% endif %}
+  >
+
+    {% csrf_token %}
+
+    <section class="df-form">
+
+      <div class="df-form-header">
+        <h2>{{ dynamic_form.form.name }}</h2>
+      </div>
+
+      {% for section in dynamic_form.sections %}
+
+        <section class="df-form-section">
+
+          <div class="df-form-section-header">
+
+            <h3>{{ section.section.name }}</h3>
+
+          </div>
+
+
+
+
+
+
+          <!-- ========================= -->
+          <!-- Top-Level Layout           -->
+          <!-- ========================= -->
+          <!--
+            Mixed field/repeatable-group order comes from the backend
+            ``section.layout_items`` collection (ordered by
+            ``layout_order``). Each entry is either
+            ``{"type": "field", "item": field_data}`` or
+            ``{"type": "group", "item": group_data}``. The two
+            renderers below are the original ones, unchanged.
+          -->
+
+          {% for layout_item in section.layout_items %}
+
+            {% if layout_item.type == "field" %}
+
+            {% with item=layout_item.item %}
+
+              <div class="df-form-fields df-field-span-{% if item.field.field_type == "TEXT" %}6{% elif item.field.field_type == "TEXTAREA" %}12{% else %}4{% endif %}">
+
+              <div
+                class="df-form-field"
+                data-field-code="{{ item.field.code }}"
+            >
+
+                <label for="field-{{ item.field.code }}">
+
+                  {{ item.field.label }}
+
+                  {% if item.field.is_required %}
+                    <span>*</span>
+                  {% endif %}
+
+                </label>
+
+
+                {% if edit_mode and item.can_edit %}
+
+                  {% if item.field.field_type == "TEXT" %}
+
+                    <input
+                      id="field-{{ item.field.code }}"
+                      type="text"
+                      name="{{ item.field.code }}"
+                      value="{{ item.display_value|default:item.value|default:'' }}"
+                    />
+
+                  {% elif item.field.field_type == "TEXTAREA" %}
+
+                    <textarea
+                      id="field-{{ item.field.code }}"
+                      name="{{ item.field.code }}"
+                    >{{ item.value|default:'' }}</textarea>
+
+                  {% elif item.field.field_type == "NUMBER" %}
+
+                    <input
+                      id="field-{{ item.field.code }}"
+                      type="number"
+                      name="{{ item.field.code }}"
+                      value="{{ item.display_value|default:item.value|default:'' }}"
+                      step="{{ item.field.number_step }}"
+                    />
+
+                  {% elif item.field.field_type == "DATE" %}
+
+                    <input
+                      id="field-{{ item.field.code }}"
+                      type="{% if item.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if item.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if item.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                      name="{{ item.field.code }}"
+                      value="{{ item.display_value|default:item.value|default:'' }}"
+                    />
+
+                  {% elif item.field.field_type == "DATETIME" %}
+
+                    <input
+                      id="field-{{ item.field.code }}"
+                      type="{% if item.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if item.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %} {% if item.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
+                      name="{{ item.field.code }}"
+                      value="{{ item.display_value|default:item.value|default:'' }}"
+                    />
+
+                  {% elif item.field.field_type == "BOOLEAN" %}
+
+                    <input
+                      type="hidden"
+                      name="{{ item.field.code }}"
+                      value="false"
+                    />
+                    <input
+                      id="field-{{ item.field.code }}"
+                      type="checkbox"
+                      name="{{ item.field.code }}"
+                      {% if item.value %}checked{% endif %}
+                    />
+
+                  {% elif item.field.field_type == "SELECT" %}
+
+                    <select
+                      id="field-{{ item.field.code }}"
+                      name="{{ item.field.code }}"
+                      data-field-id="{{ item.field.pk }}"
+                      data-field-code="{{ item.field.code }}"
+                      {% if item.parent_code %}
+                      data-depends-on="{{ item.parent_code }}"
+                      data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                      {% endif %}
+                  >
+                      <option value="">---------</option>
+
+                      {% for choice in item.choices %}
+                          <option
+                              value="{{ choice.value }}"
+                              {% if item.value|stringformat:"s" == choice.value|stringformat:"s" %}
+                                  selected
+                              {% endif %}
+                          >
+                              {{ choice.label }}
+                          </option>
+                      {% endfor %}
+                  </select>
+
+                  {% endif %}
+
+                {% else %}
+
+                  {% if item.field.field_type == "BOOLEAN" %}
+                    <input
+                      type="checkbox"
+                      {% if item.value %}checked{% endif %}
+                      disabled
+                    />
+                  {% else %}
+                    <div class="df-form-value{% if item.field.field_type == 'FORMULA' %} df-formula-value{% endif %}">
+                      {{ item.display_value|default:item.value|default:"—" }}
+                    </div>
+                  {% endif %}
+
+                {% endif %}
+
+                {% for validation_error in validation_errors %}
+                  {% if validation_error.type == "field" and validation_error.code == item.field.code %}
+                    <div
+                        class="df-field-error"
+                        data-field-error="{{ item.field.code }}"
+                    >{{ validation_error.message }}</div>
+                  {% endif %}
+                {% empty %}
+                  <div
+                      class="df-field-error"
+                      data-field-error="{{ item.field.code }}"
+                      hidden
+                  ></div>
+                {% endfor %}
+
+              </div>
+
+              </div>
+
+            {% endwith %}
+
+            {% elif layout_item.type == "group" %}
+
+            {% with group=layout_item.item %}
+
+            {% if group.group.group_type == "DEVICE" %}
+
+            <section
+              class="df-repeatable-group df-table-group df-device-group"
+              data-repeatable-group="{{ group.group.code }}"
+              data-repeatable-device-group="{{ group.group.code }}"
+            >
+              <div class="df-form-section-header">
+                <div><h3>{{ group.group.label }}</h3></div>
+                {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
+                  <button type="button" class="df-button df-button-secondary df-device-add" data-group-code="{{ group.group.code }}">
+                    + افزودن دستگاه
+                  </button>
+                {% endif %}
+              </div>
+
+              {% for validation_error in validation_errors %}
+                {% if validation_error.type == "device_group" and validation_error.group_code == group.group.code %}
+                  <div class="df-device-group-error">{{ validation_error.message }}</div>
+                {% endif %}
+              {% endfor %}
+
+              <input type="hidden" name="{{ group.group.code }}__present" value="1" data-repeatable-presence />
+
+              <div class="df-table-wrapper">
+                <table class="df-normal-table">
+                  <thead>
+                    <tr>
+                      {% for column in group.flat_table.columns %}
+                        <th>{{ column.field_context.field.label }}</th>
+                      {% endfor %}
+                      <th>عملیات</th>
+                    </tr>
+                  </thead>
+                  <tbody class="df-repeatable-items df-device-table-body" data-group-code="{{ group.group.code }}">
+                    {% include "operator_panel/_repeatable_flat_table.html" with group=group %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {% elif group.group.display_type == "TABLE" %}
+
+            <section
+              class="df-repeatable-group df-table-group"
+              data-repeatable-group="{{ group.group.code }}"
+            >
+              <div class="df-form-section-header">
+                <div>
+                  <h3>{{ group.group.label }}</h3>
+                </div>
+
+                {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
+                  <button
+                    type="button"
+                    class="df-button df-button-secondary df-repeatable-add"
+                    data-group-code="{{ group.group.code }}"
+                  >
+                    + افزودن {{ group.group.label }}
+                  </button>
+                {% endif %}
+              </div>
+
+              {% for validation_error in validation_errors %}
+                {% if validation_error.type == "group" and validation_error.code == group.group.code %}
+                  <div class="df-repeatable-validation-error">
+                    <span class="df-repeatable-validation-error-icon">!</span>
+                    <span>{{ validation_error.message }}</span>
+                  </div>
+                {% endif %}
+              {% endfor %}
+               <input
+                 type="hidden"
+                 name="{{ group.group.code }}__present"
+                 value="1"
+                 data-repeatable-presence
+               />
+
+
+              <div class="df-table-wrapper">
+                <table class="df-normal-table">
+                  <thead>
+                    <tr>
+                      {% for column in group.flat_table.columns %}
+                        <th>{{ column.field_context.field.label }}</th>
+                      {% endfor %}
+                      <th>عملیات</th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    class="df-repeatable-items"
+                    data-group-code="{{ group.group.code }}"
+                  >
+                    {% include "operator_panel/_repeatable_flat_table.html" with group=group %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            {% else %}
+
+            <section
+              class="df-repeatable-group"
+              data-repeatable-group="{{ group.group.code }}"
+            >
+              <div class="df-form-section-header">
+                <div>
+                  <h3>{{ group.group.label }}</h3>
+                </div>
+
+                {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
+                  <button
+                    type="button"
+                    class="df-button df-button-secondary df-repeatable-add"
+                    data-group-code="{{ group.group.code }}"
+                  >
+                    + افزودن
+                  </button>
+                {% endif %}
+              </div>
+              {% for validation_error in validation_errors %}
+              {% if validation_error.type == "group" and validation_error.code == group.group.code %}
+                <div class="df-repeatable-validation-error">
+                  <span class="df-repeatable-validation-error-icon">!</span>
+                  <span>{{ validation_error.message }}</span>
+                </div>
+              {% endif %}
+            {% endfor %}
+
+
+              <div
+                class="df-repeatable-items"
+                data-group-code="{{ group.group.code }}"
+              >
+
+
+
+                {% if group.items %}
+
+                  {% for item in group.items %}
+
+                  {% with item_index=forloop.counter0 %}
+
+                    <div
+                      class="df-repeatable-item"
+                      data-repeatable-item
+                      {% if item.row_id %}data-row-id="{{ item.row_id }}"{% endif %}
+                    >
+
+                    {% if item.row_id %}
+                      <input type="hidden" name="{{ group.group.code }}_{{ item_index }}__id" value="{{ item.row_id }}" />
+                    {% endif %}
+
+                    {% for item_field in item.fields %}
+
+                      <div
+                          class="df-form-field"
+                          data-field-code="{{ item_field.field.code }}"
+                      >
+
+                        <label for="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}">
+
+                          {{ item_field.field.label }}
+
+                          {% if item_field.field.is_required %}
+                            <span>*</span>
+                          {% endif %}
+
+                        </label>
+
+
+                        {% if edit_mode and not dynamic_form.is_submitted and item_field.can_edit %}
+
+                          {% if item_field.field.field_type == "TEXT" %}
+
+                            <input
+                              type="text"
+                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
+                              value="{{ item_field.display_value|default:item_field.value|default:'' }}"
+                            />
+
+                          {% elif item_field.field.field_type == "TEXTAREA" %}
+
+                            <textarea
+                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
+                            >{{ item_field.value|default:'' }}</textarea>
+
+                          {% elif item_field.field.field_type == "NUMBER" %}
+
+                            <input
+                              type="number"
+                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
+                              value="{{ item_field.display_value|default:item_field.value|default:'' }}"
+                              step="{{ item_field.field.number_step }}"
+                            />
+
+                          {% elif item_field.field.field_type == "DATE" %}
+
+                            <input
+                              type="{% if item_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}" {% if item_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
+                              value="{{ item_field.display_value|default:item_field.value|default:'' }}"
+                            />
+
+                          {% elif item_field.field.field_type == "DATETIME" %}
+
+                            <input
+                              type="{% if item_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}" {% if item_field.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
+                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
+                              value="{{ item_field.display_value|default:item_field.value|default:'' }}"
+                            />
+
+                          {% elif item_field.field.field_type == "BOOLEAN" %}
+
+                            <input
+                              type="checkbox"
+                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
+                              {% if item_field.value %}checked{% endif %}
+                            />
+
+                          {% elif item_field.field.field_type == "SELECT" %}
+
+                            <select
+                              id="repeatable-{{ group.group.code }}-{{ item_index }}-{{ item_field.field.code }}"
+                              name="{{ group.group.code }}_{{ item_index }}_{{ item_field.field.code }}"
+                              data-field-id="{{ item_field.field.pk }}"
+                              data-field-code="{{ item_field.field.code }}"
+                              {% if item_field.parent_code %}
+                              data-depends-on="{{ item_field.parent_code }}"
+                              data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                              {% endif %}
+                            >
+                              <option value="">---------</option>
+
+                              {% for choice in item_field.choices %}
+
+                                <option
+                                    value="{{ choice.value }}"
+                                    {% if item_field.value|stringformat:"s" == choice.value|stringformat:"s" %}
+                                        selected
+                                    {% endif %}
+                                >
+                                    {{ choice.label }}
+                                </option>
+
+                              {% endfor %}
+
+                            </select>
+
+                          {% endif %}
+
+                        {% else %}
+
+                          {% if item_field.field.field_type == "BOOLEAN" %}
+                            <input
+                              type="checkbox"
+                              {% if item_field.value %}checked{% endif %}
+                              disabled
+                            />
+                          {% else %}
+                            <div class="df-form-value">
+                              {{ item_field.display_value|default:item_field.value|default:"—" }}
+                            </div>
+                          {% endif %}
+
+                        {% endif %}
+                        
+                        {% for validation_error in validation_errors %}
+
+                            {% if validation_error.type == "repeatable_field" %}
+                                {% if validation_error.group_code == group.group.code %}
+                                    {% if validation_error.field_code == item_field.field.code %}
+                                        {% if validation_error.item_index == item_index %}
+
+                                            <div class="df-repeatable-field-error">
+                                                <span class="df-repeatable-field-error-icon">!</span>
+                                                <span>{{ validation_error.message }}</span>
+                                            </div>
+
+                                        {% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            {% endif %}
+
+                        {% endfor %}
+                      </div>
+
+                    {% endfor %}
+
+                        <div class="df-repeatable-child-row">
+                          {% with root_index=item_index|stringformat:"s" %}
+                            {% with root_name_prefix=group.group.code|add:"_"|add:root_index %}
+                              {% include "operator_panel/_repeatable_child_groups.html" with group=group item=item item_index=item_index name_prefix=root_name_prefix %}
+                            {% endwith %}
+                          {% endwith %}
+                        </div>
+                    {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
+                      <div class="df-repeatable-item-actions">
+                        <button
+                          type="button"
+                          class="df-button df-button-danger df-repeatable-delete"
+                          title="حذف این ردیف"
+                        >
+                          حذف
+                        </button>
+                      </div>
+                    {% endif %}
+
+                  </div>
+
+                  {% endwith %}
+
+                {% endfor %}
+
+              {% else %}
+
+                {% if edit_mode and not dynamic_form.is_submitted and group.can_add %}
+                  <div
+                    class="df-repeatable-item"
+                    data-repeatable-item
+                    data-repeatable-template
+                    style="display:none;"
+                  >
+                    {% for template_field in group.fields %}
+                      <div
+                        class="df-form-field"
+                        data-field-code="{{ template_field.field.code }}"
+                      >
+                        <label for="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}">
+                          {{ template_field.field.label }}
+                          {% if template_field.field.is_required %}
+                            <span>*</span>
+                          {% endif %}
+                        </label>
+
+                        {% if template_field.field.field_type == "TEXT" %}
+                          <input
+                            type="text"
+                            id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                            value="{{ template_field.value|default:'' }}"
+                            step="{{ template_field.field.number_step }}"
+                          />
+
+                        {% elif template_field.field.field_type == "TEXTAREA" %}
+                          <textarea
+                            id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          >{{ template_field.value|default:'' }}</textarea>
+                        {% elif template_field.field.field_type == "NUMBER" %}
+                          <input
+                            type="number"
+                            id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "DATE" %}
+                          <input
+                            type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if template_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                            id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "DATETIME" %}
+                          <input
+                            type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %} {% if template_field.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
+                            id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "BOOLEAN" %}
+                          <input
+                            type="checkbox"
+                            id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                          />
+
+                        {% elif template_field.field.field_type == "SELECT" %}
+                          <select
+                            id="repeatable-{{ group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                            name="{{ group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                            data-field-id="{{ template_field.field.pk }}"
+                            data-field-code="{{ template_field.field.code }}"
+                            {% if template_field.parent_code %}
+                            data-depends-on="{{ template_field.parent_code }}"
+                            data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                            {% endif %}
+                          >
+                            <option value="">---------</option>
+                            {% for choice in template_field.choices %}
+                              <option value="{{ choice.value }}">
+                                {{ choice.label }}
+                              </option>
+                            {% endfor %}
+                          </select>
+
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="df-empty-state">
+                  هنوز اطلاعاتی برای این گروه ثبت نشده است.
+                </div>
+
+              {% endif %}
+            </div>
+            </section>
+
+            {% endif %}
+
+            {% endwith %}
+
+            {% endif %}
+
+          {% endfor %}
+
+
+          <!-- ========================= -->
+          <!-- Form Actions               -->
+          <!-- ========================= -->
+        </section>
+
+      {% endfor %}
+
+{% if edit_mode %}
+
+  <div class="df-form-actions">
+
+    <button
+      type="submit"
+      class="df-button"
+    >
+      ذخیره
+    </button>
+
+    <a
+      href="{% url 'operator_panel:workflow_instance' instance.pk %}"
+      class="df-button df-button-secondary"
+    >
+      انصراف
+    </a>
+
+  </div>
+
+{% endif %}
+  </form>
+
+  {% for section in dynamic_form.sections %}
+    {% for group in section.repeatable_groups %}
+
+        {% if edit_mode and group.group.group_type == "DEVICE" and group.can_add and not dynamic_form.is_submitted %}
+
+            <div
+              class="df-device-modal"
+              data-device-modal="{{ group.group.code }}"
+              data-device-lookup-url="{% url 'operator_panel:lookup_device_by_imei' %}"
+              data-device-history-base="{% url 'operator_panel:workflow_instance' instance.pk %}device/"
+              hidden
+          >
+
+                <div class="df-device-modal-backdrop"></div>
+
+                <div class="df-device-modal-card">
+
+                    <div class="df-device-modal-header">
+
+                        <div>
+                            <h2>افزودن دستگاه</h2>
+                        </div>
+
+                        <button
+                            type="button"
+                            class="df-device-modal-close"
+                            aria-label="بستن پنجره افزودن دستگاه"
+                        >
+                            ×
+                        </button>
+
+                    </div>
+
+                    <div class="df-device-modal-body">
+
+                      {# IMEI FIRST #}
+
+{% for field_info in group.fields %}
+
+    {% if field_info.can_edit and field_info.field.system_key == "IMEI" %}
+
+        <div
+            class="df-device-modal-field"
+            data-system-key="IMEI"
+        >
+
+            <label>
+                {{ field_info.field.label }}
+
+                {% if field_info.field.is_required %}
+                    <span>*</span>
+                {% endif %}
+            </label>
+
+            <input
+                type="text"
+                data-device-modal-field="{{ field_info.field.code }}"
+                data-field-code="{{ field_info.field.code }}"
+                data-system-key="IMEI"
+                value="{{ field_info.value|default:'' }}"
+            >
+
+            <div class="df-device-modal-error"></div>
+
+        </div>
+
+    {% endif %}
+
+{% endfor %}
+
+                        {% for field_info in group.fields %}
+
+    {% if field_info.can_edit and field_info.field.system_key != "IMEI" %}
+
+        <div
+            class="df-device-modal-field"
+            data-system-key="{{ field_info.field.system_key }}"
+        >
+
+            <label>
+                {{ field_info.field.label }}
+
+                {% if field_info.field.is_required %}
+                    <span>*</span>
+                {% endif %}
+            </label>
+
+            {% if field_info.field.system_key == "DEVICE_TYPE" %}
+
+                <select
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                    data-system-key="DEVICE_TYPE"
+                >
+                    <option value="">---------</option>
+
+                    {% for choice in field_info.device_types %}
+                        <option value="{{ choice.id }}">
+                            {{ choice.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+            {% elif field_info.field.system_key == "DEVICE_MODEL" %}
+                <select
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                    data-system-key="DEVICE_MODEL"
+                    data-device-models-url="{% url 'operator_panel:device_models_by_type' %}"
+                    disabled
+                >
+                    <option value="">---------</option>
+                    {% for choice in field_info.device_models %}
+                        <option value="{{ choice.id }}">
+                            {{ choice.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+            {% elif field_info.field.field_type == "TEXTAREA" %}
+
+                <textarea
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                >{{ field_info.value|default:'' }}</textarea>
+
+            {% elif field_info.field.field_type == "SELECT" %}
+
+                <select
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                >
+                    <option value="">---------</option>
+
+                    {% for choice in field_info.choices %}
+                        <option value="{{ choice.value }}">
+                            {{ choice.label }}
+                        </option>
+                    {% endfor %}
+                </select>
+
+            {% else %}
+
+                <input
+                    type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' and field_info.field.calendar == 'JALALI' %}text{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' and field_info.field.calendar == 'JALALI' %}text{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
+                    data-device-modal-field="{{ field_info.field.code }}"
+                    data-field-code="{{ field_info.field.code }}"
+                    value="{{ field_info.value|default:'' }}"
+                >
+
+            {% endif %}
+
+            <div class="df-device-modal-error"></div>
+
+        </div>
+
+    {% endif %}
+
+{% endfor %}
+
+                    </div>
+
+                    {% for child_group in group.child_groups %}
+                      {% if child_group.can_view %}
+                        <div
+                          class="df-device-modal-child-group"
+                          data-device-child-group="{{ child_group.group.code }}"
+                        >
+                          <div class="df-device-modal-child-group-title">
+                            {{ child_group.group.label }}
+                          </div>
+
+                          {% for field_info in child_group.fields %}
+                            {% if field_info.can_edit %}
+                              <div
+                                class="df-device-modal-field"
+                                data-device-child-field
+                                data-child-group-code="{{ child_group.group.code }}"
+                              >
+                                <label>
+                                  {{ field_info.field.label }}
+                                  {% if field_info.field.is_required %}<span>*</span>{% endif %}
+                                </label>
+
+                                {% if field_info.field.field_type == "TEXTAREA" %}
+                                  <textarea
+                                    data-device-modal-child-field="{{ field_info.field.code }}"
+                                    data-field-code="{{ field_info.field.code }}"
+                                    data-field-type="{{ field_info.field.field_type }}"
+                                  >{{ field_info.value|default:'' }}</textarea>
+                                {% elif field_info.field.field_type == "SELECT" %}
+                                  <select
+                                    data-device-modal-child-field="{{ field_info.field.code }}"
+                                    data-field-code="{{ field_info.field.code }}"
+                                    data-field-type="{{ field_info.field.field_type }}"
+                                    {% if field_info.parent_code %}
+                                    data-depends-on="{{ field_info.parent_code }}"
+                                    data-field-id="{{ field_info.field.pk }}"
+                                    data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                                    {% endif %}
+                                  >
+                                    <option value="">---------</option>
+                                    {% for choice in field_info.choices %}
+                                      <option value="{{ choice.value }}">{{ choice.label }}</option>
+                                    {% endfor %}
+                                  </select>
+                                {% elif field_info.field.field_type == "BOOLEAN" %}
+                                  <input
+                                    type="checkbox"
+                                    data-device-modal-child-field="{{ field_info.field.code }}"
+                                    data-field-code="{{ field_info.field.code }}"
+                                    data-field-type="{{ field_info.field.field_type }}"
+                                  >
+                                {% else %}
+                                  <input
+                                    type="{% if field_info.field.field_type == 'NUMBER' %}number{% elif field_info.field.field_type == 'DATE' %}date{% elif field_info.field.field_type == 'DATETIME' %}datetime-local{% else %}text{% endif %}"
+                                    data-device-modal-child-field="{{ field_info.field.code }}"
+                                    data-field-code="{{ field_info.field.code }}"
+                                    data-field-type="{{ field_info.field.field_type }}"
+                                  >
+                                {% endif %}
+
+                                <div class="df-device-modal-error"></div>
+                              </div>
+                            {% endif %}
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    {% endfor %}
+
+                    <div class="df-device-modal-footer">
+
+                        <button
+                            type="button"
+                            class="df-button df-button-secondary df-device-modal-cancel"
+                        >
+                            انصراف
+                        </button>
+
+                        <button
+                            type="button"
+                            class="df-button df-device-modal-submit"
+                            data-group-code="{{ group.group.code }}"
+                        >
+                            افزودن دستگاه
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        {% endif %}
+
+    {% endfor %}
+{% endfor %}
+
+{% if not pending_acceptance and not dynamic_form.is_submitted and dynamic_form.has_saved_data and dynamic_form.can_reenter_edit_mode and not edit_mode %}
+
+  <div class="df-form-actions">
+    <a
+      href="?edit=1"
+      class="df-button"
+    >
+      ویرایش اطلاعات
+    </a>
+  </div>
+
+{% endif %}
+
+
+
+  {% endif %}
+
+  
+{% if error %}
+  <div class="error">{{ error }}</div>
+  {% endif %}
+
+  {% if validation_errors %}
+  {{ validation_errors|json_script:"validation-errors" }}
+{% endif %}
+  
+  {% if instance.status == "ACTIVE" and not pending_acceptance %}
+
+  <section class="df-workflow-actions">
+    <div class="df-workflow-actions-header">
+      <h2>عملیات فرآیند</h2>
+      <p>با انتخاب یک گزینه، فرآیند به مرحله بعد منتقل می‌شود.</p>
+    </div>
+
+    {% if transitions %}
+      {% for transition in transitions %}
+      <form method="post" data-workflow-transition action="{% url 'operator_panel:execute_transition' instance.pk transition.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="df-button df-button-secondary"{% if edit_mode %} disabled{% endif %}>{{ transition.name }}</button>
+        {% if transition.description %}<p>{{ transition.description }}</p>{% endif %}
+      </form>
+      {% endfor %}
+    {% else %}
+      <p>هیچ Transition فعالی برای این مرحله وجود ندارد.</p>
+    {% endif %}
+  </section>
+
+{% elif pending_acceptance %}
+
+  <section class="df-workflow-actions">
+    <div class="df-workflow-actions-header">
+      <h2>تأیید دریافت</h2>
+      <p>این مورد در انتظار تعیین تکلیف است.</p>
+    </div>
+
+    {% if pending_acceptance_can_accept %}
+    <form method="post" data-workflow-transition action="{% url 'operator_panel:accept_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
+      {% csrf_token %}
+      <button type="submit" class="df-button df-button-primary">تأیید دریافت</button>
+    </form>
+    {% endif %}
+
+    {% if pending_acceptance_can_reject %}
+    <form method="post" data-workflow-transition action="{% url 'operator_panel:reject_pending_acceptance' request.resolver_match.kwargs.transition_execution_id %}">
+      {% csrf_token %}
+      <button type="submit" class="df-button df-button-secondary">رد دریافت</button>
+    </form>
+    {% endif %}
+  </section>
+
+{% else %}
+
+  <p>این فرآیند فعال نیست.</p>
+
+{% endif %}
+{% endblock %}
+</div>

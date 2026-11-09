@@ -1,0 +1,322 @@
+class OperatorFormSerializer:
+    """Serialize workflow form state into the Operator Panel template contract."""
+
+    @staticmethod
+    def field(
+        *,
+        field,
+        can_edit,
+        permission_can_edit=None,
+        value="",
+        display_value="",
+        choices=None,
+        parent_code=None,
+        device_types=None,
+        device_models=None,
+        is_immutable=None,
+        is_imei_immutable=None,
+    ):
+        data = {
+            "field": field,
+            "can_edit": can_edit,
+            "permission_can_edit": (
+                can_edit
+                if permission_can_edit is None
+                else permission_can_edit
+            ),
+            "value": value,
+            "display_value": display_value,
+            "choices": choices or [],
+            "parent_code": parent_code,
+        }
+
+        if device_types is not None:
+            data["device_types"] = device_types
+
+        if device_models is not None:
+            data["device_models"] = device_models
+
+        if is_immutable is not None:
+            data["is_immutable"] = is_immutable
+
+        if is_imei_immutable is not None:
+            data["is_imei_immutable"] = is_imei_immutable
+
+        return data
+
+    @staticmethod
+    def item(*, fields, row_id="", child_groups=None, **extra):
+        """Build a repeatable item presentation context."""
+
+        data = {
+            **extra,
+            "_id": row_id,
+            "row_id": row_id,
+            "fields": fields,
+        }
+
+        if child_groups is not None:
+            data["child_groups"] = child_groups
+
+        return data
+
+    @staticmethod
+    def section(*, section_context):
+        """Serialize one SectionContext into the operator template contract."""
+        return {
+            "section": section_context["section"],
+            "fields": section_context.get("fields", []),
+            "repeatable_groups": section_context.get(
+                "repeatable_groups",
+                [],
+            ),
+            "layout_items": section_context.get("layout_items", []),
+        }
+
+    @staticmethod
+    def device(*, device_context):
+        """Serialize a DeviceContext into the operator row device contract."""
+        device_model = device_context.get("device_model")
+
+        return {
+            "instance_device_id": device_context.get("instance_device_id"),
+            "device_id": device_context.get("device_id", ""),
+            "is_existing_device": device_context.get(
+                "is_existing_device",
+                False,
+            ),
+            "device_model_id": (
+                device_model.pk
+                if device_model is not None
+                else ""
+            ),
+            "device_type": (
+                str(device_context.get("device_type"))
+                if device_context.get("device_type") is not None
+                else ""
+            ),
+            "device_model": (
+                str(device_model)
+                if device_model is not None
+                else ""
+            ),
+            "reported_problem": device_context.get(
+                "reported_problem",
+                "",
+            ),
+            "description": device_context.get(
+                "description",
+                "",
+            ),
+            "warranty_status": device_context.get(
+                "warranty_status",
+                "",
+            ),
+            "status": device_context.get("status", ""),
+            "identifiers": device_context.get("identifiers", []),
+            "has_history": device_context.get(
+                "has_history",
+                False,
+            ),
+        }
+
+    @staticmethod
+    def row(*, row_context):
+        """Serialize one canonical RowContext into the operator template contract."""
+        fields = []
+
+        for field_context in row_context.get("fields", []):
+            field = field_context["field"]
+            fields.append(
+                OperatorFormSerializer.field(
+                    field=field,
+                    can_edit=field_context["can_edit"],
+                    permission_can_edit=field_context.get(
+                        "permission_can_edit",
+                        False,
+                    ),
+                    value=field_context.get("value", ""),
+                    display_value=field_context.get(
+                        "display_value",
+                        "",
+                    ),
+                    choices=field_context.get("choices", []),
+                    device_types=field_context.get("device_types"),
+                    device_models=field_context.get("device_models"),
+                    parent_code=field_context.get("parent_code"),
+                    is_immutable=field_context.get("is_immutable"),
+                    is_imei_immutable=field_context.get(
+                        "is_imei_immutable"
+                    ),
+                )
+            )
+
+        child_groups = [
+            OperatorFormSerializer.group_context(
+                group_context=child_group,
+            )
+            for child_group in row_context.get("child_groups", [])
+        ]
+
+        item = OperatorFormSerializer.item(
+            row_id=row_context.get("row_id", ""),
+            row_order=row_context.get("row_order"),
+            parent_row_id=row_context.get("parent_row_id"),
+            child_groups=child_groups,
+            fields=fields,
+        )
+
+        device = row_context.get("device")
+        if device is not None:
+            item.update(
+                OperatorFormSerializer.device(
+                    device_context=device,
+                )
+            )
+
+        return item
+
+    @staticmethod
+    def group_context(*, group_context):
+        """Serialize a GroupContext into the operator template contract."""
+        items = [
+            OperatorFormSerializer.row(row_context=row)
+            for row in group_context.get("items", [])
+        ]
+
+        permissions = group_context.get("permissions", {})
+
+        data = OperatorFormSerializer.repeatable_group(
+            group=group_context["group"],
+            fields=group_context.get("fields", []),
+            items=items,
+            has_editable_fields=group_context.get(
+                "has_editable_fields",
+                False,
+            ),
+            can_view=permissions.get("can_view", False),
+            can_edit=permissions.get("can_edit", False),
+            can_add=permissions.get("can_add", False),
+            can_delete=permissions.get("can_delete", False),
+        )
+
+        if "flat_table" in group_context:
+            data["flat_table"] = group_context["flat_table"]
+
+        if "child_groups" in group_context:
+            data["child_groups"] = [
+                OperatorFormSerializer.group_context(
+                    group_context=child_group,
+                )
+                for child_group in group_context.get("child_groups", [])
+            ]
+
+        return data
+
+    @staticmethod
+    def normal_item(
+        *,
+        row_id="",
+        row_order=None,
+        parent_row_id=None,
+        field_contexts,
+        values,
+        display_values,
+        child_groups=None,
+    ):
+        """Serialize one normal repeatable row through the canonical row path."""
+
+        row_fields = []
+
+        for field_context in field_contexts:
+            context = dict(field_context)
+            field = context["field"]
+            context["value"] = values.get(field.code, "")
+            context["display_value"] = display_values.get(
+                field.code,
+                "",
+            )
+            row_fields.append(context)
+
+        return OperatorFormSerializer.row(
+            row_context={
+                "row_id": row_id,
+                "row_order": row_order,
+                "parent_row_id": parent_row_id,
+                "fields": row_fields,
+                "child_groups": child_groups or [],
+            }
+        )
+
+    @staticmethod
+    def normal_repeatable_group(
+        *,
+        group,
+        group_fields,
+        field_contexts_by_item,
+        item_contexts,
+        has_editable_fields,
+        can_view,
+        can_edit,
+        can_add,
+        can_delete,
+    ):
+        """Serialize a normal repeatable group and its rows."""
+
+        items = []
+
+        for index, item_context in enumerate(item_contexts):
+            field_contexts = field_contexts_by_item[index]
+            items.append(
+                OperatorFormSerializer.normal_item(
+                    row_id=item_context.get("row_id", ""),
+                    row_order=item_context.get("row_order", index),
+                    parent_row_id=item_context.get("parent_row_id"),
+                    field_contexts=field_contexts,
+                    values=item_context.get("values", {}),
+                    display_values=item_context.get(
+                        "display_values",
+                        {},
+                    ),
+                    child_groups=item_context.get(
+                        "child_groups",
+                        [],
+                    ),
+                )
+            )
+
+        return OperatorFormSerializer.repeatable_group(
+            group=group,
+            fields=group_fields,
+            items=items,
+            has_editable_fields=has_editable_fields,
+            can_view=can_view,
+            can_edit=can_edit,
+            can_add=can_add,
+            can_delete=can_delete,
+        )
+
+    @staticmethod
+    def repeatable_group(
+        *,
+        group,
+        fields,
+        items,
+        has_editable_fields,
+        can_view,
+        can_edit,
+        can_add,
+        can_delete,
+    ):
+        """Build a repeatable group presentation context."""
+
+        return {
+            "group": group,
+            "fields": fields,
+            "items": items,
+            "has_editable_fields": has_editable_fields,
+            "can_view": can_view,
+            "can_edit": can_edit,
+            "can_add": can_add,
+            "can_delete": can_delete,
+        }

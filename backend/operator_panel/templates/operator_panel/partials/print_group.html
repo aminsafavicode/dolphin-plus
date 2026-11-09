@@ -1,0 +1,27 @@
+<section class="group-block">
+  <h3>{{ item.label }}</h3>
+  {% if item.layout == "TABLE" and item.columns %}
+    <table>
+      <thead><tr>{% for column in item.columns %}<th>{{ column }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in item.rows %}
+          <tr>{% for field in row.fields %}<td>{% if field.value != "" and field.value != None %}{% if field.is_boolean %}<span class="boolean-mark{% if field.boolean_checked %} is-checked{% endif %}" role="img" aria-label="{% if field.boolean_checked %}بله{% else %}خیر{% endif %}"></span>{% elif field.keep_value_together %}<span class="keep-value-together">{{ field.value }}</span>{% else %}{{ field.value }}{% endif %}{% else %}<span class="empty">—</span>{% endif %}</td>{% endfor %}</tr>
+          {% if row.child_groups %}
+            <tr><td colspan="{{ item.columns|length }}">
+              {% for child in row.child_groups %}{% include "operator_panel/partials/print_group.html" with item=child %}{% endfor %}
+            </td></tr>
+          {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    {% for row in item.rows %}
+      <div class="group-block">
+        {% for field in row.fields %}
+          <div><strong>{{ field.label }}:</strong> {% if field.value != "" and field.value != None %}{% if field.is_boolean %}<span class="boolean-mark{% if field.boolean_checked %} is-checked{% endif %}" role="img" aria-label="{% if field.boolean_checked %}بله{% else %}خیر{% endif %}"></span>{% elif field.keep_value_together %}<span class="keep-value-together">{{ field.value }}</span>{% else %}{{ field.value }}{% endif %}{% else %}<span class="empty">—</span>{% endif %}</div>
+        {% endfor %}
+        {% for child in row.child_groups %}{% include "operator_panel/partials/print_group.html" with item=child %}{% endfor %}
+      </div>
+    {% empty %}<p class="empty">داده‌ای ثبت نشده است.</p>{% endfor %}
+  {% endif %}
+</section>

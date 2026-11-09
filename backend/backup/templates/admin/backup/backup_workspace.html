@@ -1,0 +1,1695 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block title %}میز کار پشتیبان‌گیری و بازیابی اطلاعات | سامانه مدیریت دلفین فلو{% endblock %}
+
+{% block nav-breadcrumbs %}{% endblock %}
+{% block nav-sidebar %}{% endblock %}
+{% block content_title %}{% endblock %}
+{% block content_subtitle %}{% endblock %}
+
+{% block content %}
+<style>
+/* ==========================================================================
+   Dolphin Flow Backup & DR Workspace (Enterprise Clean - Real Logic Only)
+   ========================================================================== */
+
+:root {
+    --df-dash-bg: #f8fafc;
+    --df-card-bg: #ffffff;
+    --df-card-border: #e2e8f0;
+    --df-text-main: #0f172a;
+    --df-text-muted: #475569;
+    --df-text-light: #64748b;
+    --df-primary: #2563eb;
+    --df-primary-light: #eff6ff;
+    --df-primary-hover: #1d4ed8;
+    --df-success: #10b981;
+    --df-success-light: #ecfdf5;
+    --df-danger: #ef4444;
+    --df-danger-light: #fef2f2;
+    --df-warning: #f59e0b;
+    --df-warning-light: #fffbeb;
+    --df-radius-lg: 16px;
+    --df-radius-md: 12px;
+    --df-radius-sm: 8px;
+    --df-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+}
+
+html[data-theme="dark"] {
+    --df-dash-bg: #090d16;
+    --df-card-bg: #0f172a;
+    --df-card-border: #1e293b;
+    --df-text-main: #f8fafc;
+    --df-text-muted: #cbd5e1;
+    --df-text-light: #94a3b8;
+    --df-primary: #3b82f6;
+    --df-primary-light: #1e293b;
+    --df-primary-hover: #2563eb;
+    --df-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+/* Global Link & Underline Reset - Strictly NO Underlines and NO Blue Links */
+#content a,
+#content a:link,
+#content a:visited,
+#content a:hover,
+#content a:active,
+.df-app-wrapper a,
+.df-app-wrapper a:link,
+.df-app-wrapper a:visited,
+.df-app-wrapper a:hover,
+.df-app-wrapper a:active {
+    text-decoration: none !important;
+}
+
+/* Override Django Admin Shell */
+#nav-sidebar, .toggle-nav-sidebar {
+    display: none !important;
+}
+div.breadcrumbs {
+    display: none !important;
+}
+.titles-and-tools {
+    display: none !important;
+}
+#content {
+    padding: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    background: var(--df-dash-bg) !important;
+}
+
+/* --------------------------------------------------------------------------
+   Layout: Sticky Non-Scrolling Sidebar + Scrollable Main Content
+   -------------------------------------------------------------------------- */
+.df-app-wrapper {
+    display: flex !important;
+    align-items: flex-start !important;
+    min-height: calc(100vh - 60px) !important;
+    direction: rtl;
+    text-align: right;
+    font-family: 'YekanBakh', 'Yekan', sans-serif !important;
+    background: var(--df-dash-bg);
+    position: relative;
+}
+
+/* Sidebar - Fixed/Sticky on Scroll */
+.df-saas-sidebar {
+    width: 250px !important;
+    min-width: 250px !important;
+    max-width: 250px !important;
+    background: var(--df-card-bg) !important;
+    border-left: 1px solid var(--df-card-border) !important;
+    padding: 20px 14px !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    position: sticky !important;
+    top: 60px !important;
+    height: calc(100vh - 60px) !important;
+    max-height: calc(100vh - 60px) !important;
+    overflow-y: auto !important;
+    flex-shrink: 0 !important;
+    z-index: 50;
+}
+
+.df-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 8px 16px 8px;
+    border-bottom: 1px solid var(--df-card-border);
+    margin-bottom: 12px;
+}
+
+.df-sidebar-brand strong {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--df-text-main);
+    display: block;
+    line-height: 1.2;
+}
+
+.df-sidebar-brand span {
+    font-size: 11.5px;
+    color: var(--df-text-muted);
+    font-weight: 600;
+}
+
+.df-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.df-sidebar-section-title {
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--df-text-light);
+    padding: 12px 10px 4px 10px;
+    letter-spacing: 0.3px;
+    user-select: none;
+}
+
+/* Sidebar Link - Strict Styling: NO Blue Text, NO Underline */
+.df-sidebar-link,
+#content a.df-sidebar-link,
+#content a.df-sidebar-link:link,
+#content a.df-sidebar-link:visited {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding: 9px 12px !important;
+    border-radius: var(--df-radius-sm) !important;
+    color: #334155 !important;
+    text-decoration: none !important;
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    transition: all 0.15s ease !important;
+    line-height: 1.4 !important;
+    border: none !important;
+    outline: none !important;
+}
+
+html[data-theme="dark"] .df-sidebar-link,
+html[data-theme="dark"] #content a.df-sidebar-link:link,
+html[data-theme="dark"] #content a.df-sidebar-link:visited {
+    color: #cbd5e1 !important;
+}
+
+.df-sidebar-link:hover,
+#content a.df-sidebar-link:hover {
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+    text-decoration: none !important;
+}
+
+html[data-theme="dark"] .df-sidebar-link:hover,
+html[data-theme="dark"] #content a.df-sidebar-link:hover {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: #ffffff !important;
+}
+
+/* Active Sidebar Link - Vibrant Blue Pill, White Text, NO Underline */
+.df-sidebar-link.active,
+#content a.df-sidebar-link.active,
+#content a.df-sidebar-link.active:link,
+#content a.df-sidebar-link.active:visited,
+#content a.df-sidebar-link.active:hover {
+    background: var(--df-primary) !important;
+    color: #ffffff !important;
+    text-decoration: none !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+}
+
+.df-sidebar-link.active *,
+#content a.df-sidebar-link.active * {
+    color: #ffffff !important;
+    text-decoration: none !important;
+}
+
+.df-sidebar-link-content {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+}
+
+.df-sidebar-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 9999px;
+    background: #dcfce7;
+    color: #15803d;
+}
+
+/* Sidebar Footer Info Card */
+.df-sidebar-footer-card {
+    background: var(--df-dash-bg);
+    border: 1px solid var(--df-card-border);
+    border-radius: var(--df-radius-md);
+    padding: 14px;
+    margin-top: 16px;
+}
+
+.df-sidebar-footer-card h4 {
+    margin: 0 0 4px 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--df-text-main);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.df-sidebar-footer-card p {
+    margin: 0 0 10px 0;
+    font-size: 11.5px;
+    color: var(--df-text-light);
+    line-height: 1.5;
+}
+
+.df-sidebar-footer-btn,
+#content a.df-sidebar-footer-btn {
+    display: block !important;
+    width: 100% !important;
+    text-align: center !important;
+    padding: 7px 10px !important;
+    border-radius: 6px !important;
+    background: var(--df-card-bg) !important;
+    color: var(--df-text-main) !important;
+    text-decoration: none !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    border: 1px solid var(--df-card-border) !important;
+    box-sizing: border-box !important;
+    transition: all 0.15s ease !important;
+}
+
+.df-sidebar-footer-btn:hover,
+#content a.df-sidebar-footer-btn:hover {
+    border-color: var(--df-primary) !important;
+    color: var(--df-primary) !important;
+    text-decoration: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   Main Content Area
+   -------------------------------------------------------------------------- */
+.df-saas-main {
+    flex: 1 1 0% !important;
+    min-width: 0 !important;
+    padding: 22px 28px !important;
+    box-sizing: border-box !important;
+}
+
+/* Header Bar */
+.df-dash-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 22px;
+}
+
+.df-dash-title-group h1 {
+    font-size: 24px;
+    font-weight: 800;
+    margin: 0 0 4px 0;
+    color: var(--df-text-main);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.df-dash-title-group p {
+    font-size: 13px;
+    color: var(--df-text-muted);
+    margin: 0;
+}
+
+.df-dash-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.df-pill-btn,
+#content a.df-pill-btn,
+#content button.df-pill-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 7px !important;
+    padding: 8px 16px !important;
+    border-radius: 9999px !important;
+    background: var(--df-card-bg) !important;
+    border: 1px solid var(--df-card-border) !important;
+    color: var(--df-text-main) !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    box-shadow: var(--df-shadow) !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    user-select: none !important;
+    font-family: inherit !important;
+}
+
+.df-pill-btn:hover,
+#content a.df-pill-btn:hover {
+    background: var(--df-dash-bg) !important;
+    border-color: var(--df-primary) !important;
+    color: var(--df-primary) !important;
+    text-decoration: none !important;
+    transform: translateY(-1px) !important;
+}
+
+.df-pill-btn.primary,
+#content a.df-pill-btn.primary,
+#content button.df-pill-btn.primary {
+    background: var(--df-primary) !important;
+    border-color: var(--df-primary) !important;
+    color: #ffffff !important;
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3) !important;
+}
+
+.df-pill-btn.primary:hover,
+#content a.df-pill-btn.primary:hover {
+    background: var(--df-primary-hover) !important;
+    color: #ffffff !important;
+}
+
+/* --------------------------------------------------------------------------
+   Top 4 Real KPI Cards
+   -------------------------------------------------------------------------- */
+.df-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+@media (max-width: 1280px) {
+    .df-kpi-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 640px) {
+    .df-kpi-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.df-stat-card {
+    background: var(--df-card-bg);
+    border: 1px solid var(--df-card-border);
+    border-radius: var(--df-radius-lg);
+    padding: 20px 22px;
+    box-shadow: var(--df-shadow);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.df-stat-card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+}
+
+.df-stat-label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--df-text-muted);
+}
+
+.df-stat-icon-wrap {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: var(--df-primary-light);
+    color: var(--df-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+}
+
+.df-stat-card.emerald .df-stat-icon-wrap {
+    background: var(--df-success-light);
+    color: var(--df-success);
+}
+
+.df-stat-card.purple .df-stat-icon-wrap {
+    background: #f3e8ff;
+    color: #9333ea;
+}
+
+.df-stat-card.amber .df-stat-icon-wrap {
+    background: var(--df-warning-light);
+    color: var(--df-warning);
+}
+
+.df-stat-value {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--df-text-main);
+    line-height: 1.1;
+    margin-bottom: 10px;
+}
+
+.df-stat-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--df-text-light);
+    flex-wrap: wrap;
+}
+
+.df-trend-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 9999px;
+}
+
+.df-trend-pill.up {
+    background: var(--df-success-light);
+    color: var(--df-success);
+}
+
+.df-trend-pill.down {
+    background: var(--df-danger-light);
+    color: var(--df-danger);
+}
+
+/* --------------------------------------------------------------------------
+   Real Content Layout: 2 Columns
+   -------------------------------------------------------------------------- */
+.df-dash-main-grid {
+    display: grid;
+    grid-template-columns: 2.1fr 1fr;
+    gap: 18px;
+    align-items: start;
+}
+
+@media (max-width: 1100px) {
+    .df-dash-main-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.df-dash-card {
+    background: var(--df-card-bg);
+    border: 1px solid var(--df-card-border);
+    border-radius: var(--df-radius-lg);
+    padding: 22px;
+    box-shadow: var(--df-shadow);
+    margin-bottom: 18px;
+}
+
+.df-dash-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 18px;
+}
+
+.df-dash-card-header h2,
+.df-dash-card-header h3 {
+    font-size: 15.5px;
+    font-weight: 800;
+    margin: 0;
+    color: var(--df-text-main);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Real Storage Progress & Breakdown Bar */
+.df-storage-progress-track {
+    width: 100%;
+    height: 14px;
+    background: #e2e8f0;
+    border-radius: 9999px;
+    overflow: hidden;
+    display: flex;
+    margin: 12px 0 16px 0;
+}
+
+.df-storage-seg-db {
+    background: #2563eb;
+    height: 100%;
+}
+
+.df-storage-seg-media {
+    background: #10b981;
+    height: 100%;
+}
+
+.df-storage-seg-backups {
+    background: #8b5cf6;
+    height: 100%;
+}
+
+.df-storage-seg-free {
+    background: #e2e8f0;
+    height: 100%;
+}
+
+/* Legend Items */
+.df-storage-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-bottom: 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--df-card-border);
+}
+
+.df-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--df-text-muted);
+}
+
+.df-legend-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+}
+
+/* 3 Clean Bottom Subcards */
+.df-chart-subcards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+}
+
+@media (max-width: 640px) {
+    .df-chart-subcards {
+        grid-template-columns: 1fr;
+    }
+}
+
+.df-subcard-item {
+    padding: 12px 14px;
+    border-radius: var(--df-radius-md);
+    background: var(--df-dash-bg);
+    border-top: 3px solid var(--df-primary);
+}
+
+.df-subcard-item.green {
+    border-top-color: var(--df-success);
+}
+
+.df-subcard-item.orange {
+    border-top-color: var(--df-warning);
+}
+
+.df-subcard-val {
+    font-size: 18px;
+    font-weight: 800;
+    color: var(--df-text-main);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+.df-subcard-lbl {
+    font-size: 12px;
+    color: var(--df-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Backups Table (Real Snapshots)
+   -------------------------------------------------------------------------- */
+.df-table-search {
+    position: relative;
+    width: 250px;
+}
+
+.df-table-search input {
+    width: 100%;
+    height: 36px;
+    padding: 6px 34px 6px 12px;
+    border-radius: 9999px;
+    border: 1px solid var(--df-card-border);
+    background: var(--df-dash-bg);
+    color: var(--df-text-main);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+}
+
+.df-table-search input:focus {
+    border-color: var(--df-primary);
+    background: var(--df-card-bg);
+}
+
+.df-table-search-icon {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--df-text-light);
+    font-size: 13px;
+    pointer-events: none;
+}
+
+.df-modern-table-wrap {
+    overflow-x: auto;
+    border-radius: var(--df-radius-md);
+}
+
+.df-modern-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: right;
+}
+
+.df-modern-table th {
+    padding: 11px 14px;
+    color: var(--df-text-muted);
+    font-size: 12px;
+    font-weight: 700;
+    border-bottom: 1px solid var(--df-card-border);
+    white-space: nowrap;
+}
+
+.df-modern-table td {
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--df-card-border);
+    vertical-align: middle;
+    color: var(--df-text-main);
+}
+
+.df-modern-table tbody tr:hover {
+    background: var(--df-dash-bg);
+}
+
+.df-file-cell {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.df-file-icon-box {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    background: var(--df-dash-bg);
+    border: 1px solid var(--df-card-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.df-file-title {
+    font-weight: 700;
+    color: var(--df-text-main);
+    font-size: 13px;
+}
+
+.df-file-tags {
+    display: flex;
+    gap: 4px;
+    margin-top: 2px;
+}
+
+.df-tag-pill {
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: var(--df-dash-bg);
+    border: 1px solid var(--df-card-border);
+    color: var(--df-text-muted);
+    font-size: 10.5px;
+    font-weight: 600;
+}
+
+.df-tag-pill.enc {
+    background: #eff6ff;
+    color: #2563eb;
+    border-color: #bfdbfe;
+}
+
+.df-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 9px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.df-status-badge.success {
+    background: var(--df-success-light);
+    color: var(--df-success);
+}
+
+.df-status-badge.failed {
+    background: var(--df-danger-light);
+    color: var(--df-danger);
+}
+
+.df-status-badge.running {
+    background: var(--df-primary-light);
+    color: var(--df-primary);
+}
+
+/* Action Buttons in Table - Strictly NO Underline */
+.df-table-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.df-icon-btn,
+#content a.df-icon-btn,
+#content button.df-icon-btn {
+    padding: 5px 11px !important;
+    border-radius: 6px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    text-decoration: none !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    border: 1px solid transparent !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    line-height: 1.4 !important;
+    font-family: inherit !important;
+}
+
+.df-icon-btn.download,
+#content a.df-icon-btn.download {
+    background: var(--df-dash-bg) !important;
+    border-color: var(--df-card-border) !important;
+    color: var(--df-primary) !important;
+}
+
+.df-icon-btn.download:hover,
+#content a.df-icon-btn.download:hover {
+    background: var(--df-primary) !important;
+    color: #ffffff !important;
+}
+
+.df-icon-btn.restore,
+#content a.df-icon-btn.restore {
+    background: var(--df-warning-light) !important;
+    color: #b45309 !important;
+    border-color: #fde68a !important;
+}
+
+.df-icon-btn.restore:hover,
+#content a.df-icon-btn.restore:hover {
+    background: var(--df-warning) !important;
+    color: #ffffff !important;
+}
+
+.df-icon-btn.delete,
+#content button.df-icon-btn.delete {
+    background: var(--df-danger-light) !important;
+    color: #dc2626 !important;
+    border-color: #fecaca !important;
+}
+
+.df-icon-btn.delete:hover,
+#content button.df-icon-btn.delete:hover {
+    background: var(--df-danger) !important;
+    color: #ffffff !important;
+}
+
+/* --------------------------------------------------------------------------
+   Real Right-Column Cards (Schedules, Destinations, Restores)
+   -------------------------------------------------------------------------- */
+.df-list-card-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: var(--df-radius-sm);
+    background: var(--df-dash-bg);
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+
+.df-list-card-item:last-child {
+    margin-bottom: 0;
+}
+
+.df-list-item-title {
+    font-weight: 700;
+    color: var(--df-text-main);
+}
+
+.df-list-item-sub {
+    font-size: 11.5px;
+    color: var(--df-text-light);
+    margin-top: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Modern Modal Windows (One-Click, Import, Retention, Delete)
+   -------------------------------------------------------------------------- */
+.df-modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    padding: 20px;
+}
+
+.df-modal-backdrop.active {
+    display: flex;
+}
+
+.df-modal-window {
+    background: var(--df-card-bg);
+    border: 1px solid var(--df-card-border);
+    border-radius: var(--df-radius-lg);
+    width: 100%;
+    max-width: 500px;
+    box-shadow: 0 20px 40px -8px rgba(0, 0, 0, 0.25);
+    overflow: hidden;
+}
+
+.df-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--df-card-border);
+}
+
+.df-modal-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--df-text-main);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.df-modal-close {
+    background: none;
+    border: none;
+    font-size: 18px;
+    color: var(--df-text-light);
+    cursor: pointer;
+    padding: 4px;
+    line-height: 1;
+}
+
+.df-modal-close:hover {
+    color: var(--df-text-main);
+}
+
+.df-modal-body {
+    padding: 22px;
+}
+
+.df-form-row-modern {
+    margin-bottom: 14px;
+}
+
+.df-form-row-modern label {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--df-text-main);
+    margin-bottom: 6px;
+}
+
+.df-switch-modern {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--df-dash-bg);
+    border-radius: var(--df-radius-md);
+    margin-bottom: 10px;
+    cursor: pointer;
+}
+
+.df-switch-modern span {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--df-text-main);
+}
+
+.df-switch-modern input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: var(--df-primary);
+}
+
+.df-select-modern,
+.df-input-modern {
+    width: 100%;
+    padding: 9px 12px;
+    border-radius: var(--df-radius-sm);
+    border: 1px solid var(--df-card-border);
+    background: var(--df-dash-bg);
+    color: var(--df-text-main);
+    font-size: 13.5px;
+    font-family: inherit;
+    box-sizing: border-box;
+}
+
+.df-select-modern:focus,
+.df-input-modern:focus {
+    border-color: var(--df-primary);
+    background: var(--df-card-bg);
+    outline: none;
+}
+
+.df-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 22px;
+    background: var(--df-dash-bg);
+    border-top: 1px solid var(--df-card-border);
+}
+
+.df-btn-primary {
+    background: var(--df-primary);
+    color: #ffffff !important;
+    border: none;
+    border-radius: var(--df-radius-sm);
+    padding: 8px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+}
+
+.df-btn-primary:hover {
+    background: var(--df-primary-hover);
+}
+
+.df-btn-secondary {
+    background: transparent;
+    color: var(--df-text-muted);
+    border: 1px solid var(--df-card-border);
+    border-radius: var(--df-radius-sm);
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+}
+</style>
+
+<div class="df-app-wrapper">
+
+    <!-- 1. Sticky / Fixed Modern Sidebar (NO Blue Links, NO Underline - Pure Backup Logic) -->
+    <aside class="df-saas-sidebar">
+        <div>
+            <!-- Workspace / Brand Header -->
+            <div class="df-sidebar-brand">
+                <span style="font-size: 26px;">🛡️</span>
+                <div>
+                    <strong>پشتیبان‌گیری و تاب‌آوری</strong>
+                    <span>مدیریت آرشیو و بازیابی اضطراری</span>
+                </div>
+            </div>
+
+            <nav class="df-sidebar-nav">
+                <span class="df-sidebar-section-title">پیشخوان و عملیات</span>
+
+                <!-- Active Backup Workspace Pill -->
+                <a href="{% url 'backup_workspace' %}" class="df-sidebar-link active">
+                    <div class="df-sidebar-link-content">
+                        <span>📊</span>
+                        <span>پیشخوان و پایش سلامت</span>
+                    </div>
+                    <span style="font-size: 12px;">✓</span>
+                </a>
+
+                <a href="javascript:void(0)" onclick="openModal('createModal')" class="df-sidebar-link">
+                    <div class="df-sidebar-link-content">
+                        <span>⚡</span>
+                        <span>ایجاد پشتیبان سریع</span>
+                    </div>
+                </a>
+
+                <a href="javascript:void(0)" onclick="openModal('importModal')" class="df-sidebar-link">
+                    <div class="df-sidebar-link-content">
+                        <span>📥</span>
+                        <span>ورود فایل خارجی (.dfbak)</span>
+                    </div>
+                </a>
+
+                <span class="df-sidebar-section-title">آرشیوها و تاریخچه</span>
+
+                <a href="{% url 'admin:backup_backup_changelist' %}" class="df-sidebar-link">
+                    <div class="df-sidebar-link-content">
+                        <span>📦</span>
+                        <span>آرشیو نسخه‌های پشتیبان</span>
+                    </div>
+                    <span class="df-sidebar-badge">{{ successful_backups_count }}</span>
+                </a>
+
+                <a href="{% url 'admin:backup_restore_changelist' %}" class="df-sidebar-link">
+                    <div class="df-sidebar-link-content">
+                        <span>🔄</span>
+                        <span>سوابق بازیابی دیتابیس</span>
+                    </div>
+                </a>
+
+                <span class="df-sidebar-section-title">پیکربندی و زیرساخت</span>
+
+                <a href="{% url 'admin:backup_backupschedule_changelist' %}" class="df-sidebar-link">
+                    <div class="df-sidebar-link-content">
+                        <span>⏱️</span>
+                        <span>زمان‌بندی‌های خودکار</span>
+                    </div>
+                    <span style="font-size: 11px; color: var(--df-text-light);">{{ schedules|length }}</span>
+                </a>
+
+                <a href="{% url 'admin:backup_backupstoragedestination_changelist' %}" class="df-sidebar-link">
+                    <div class="df-sidebar-link-content">
+                        <span>🌐</span>
+                        <span>مقاصد ذخیره‌سازی ابری / S3</span>
+                    </div>
+                    <span style="font-size: 11px; color: var(--df-text-light);">{{ destinations|length }}</span>
+                </a>
+
+                <a href="javascript:void(0)" onclick="openModal('retentionModal')" class="df-sidebar-link">
+                    <div class="df-sidebar-link-content">
+                        <span>⚙️</span>
+                        <span>سیاست نگهداری و پاک‌سازی</span>
+                    </div>
+                </a>
+            </nav>
+        </div>
+
+        <!-- Sidebar Footer Status Card -->
+        <div class="df-sidebar-footer-card">
+            <h4>
+                <span>⚡</span>
+                <span>مرکز فرماندهی اصلی</span>
+            </h4>
+            <p>خروج از پیشخوان پشتیبان‌گیری و بازگشت به داشبورد عمومی دلفین فلو.</p>
+            <a href="{% url 'dolphin_admin:index' %}" class="df-sidebar-footer-btn">
+                <span>↩ بازگشت به داشبورد اصلی</span>
+            </a>
+        </div>
+    </aside>
+
+    <!-- 2. Scrollable Main Dashboard Canvas -->
+    <main class="df-saas-main">
+
+        <!-- Executive Top Header Bar -->
+        <header class="df-dash-header">
+            <div class="df-dash-title-group">
+                <h1>
+                    <span>🛡️</span>
+                    <span>میز کار پشتیبان‌گیری و بازیابی اطلاعات</span>
+                </h1>
+                <p>پایش بلادرنگ دیتابیس، فضای ذخیره‌سازی، مقاصد ابری و بازیابی اضطراری</p>
+            </div>
+            <div class="df-dash-header-actions">
+                <!-- Retention Policy Trigger -->
+                <button type="button" class="df-pill-btn" onclick="openModal('retentionModal')" title="تنظیم سیاست پاک‌سازی و نگهداری">
+                    <span>⚙️</span>
+                    <span>تنظیمات پاک‌سازی خودکار</span>
+                </button>
+
+                <!-- Import Archive Trigger -->
+                <button type="button" class="df-pill-btn" onclick="openModal('importModal')" title="بارگذاری فایل .dfbak خارجی">
+                    <span>📥</span>
+                    <span>ورود فایل پشتیبان خارجی</span>
+                </button>
+
+                <!-- Primary Action: Create Backup -->
+                <button type="button" class="df-pill-btn primary" onclick="openModal('createModal')" title="تهیه نسخه پشتیبان اضطراری با یک کلیک">
+                    <span>⚡</span>
+                    <span>ایجاد پشتیبان سریع</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Top 4 Real KPI Cards -->
+        <section class="df-kpi-grid">
+            <!-- KPI 1: Database Size -->
+            <div class="df-stat-card">
+                <div class="df-stat-card-top">
+                    <span class="df-stat-label">حجم داده‌های PostgreSQL</span>
+                    <div class="df-stat-icon-wrap">🗄️</div>
+                </div>
+                <div class="df-stat-value">{{ db_size|filesizeformat }}</div>
+                <div class="df-stat-footer">
+                    <span class="df-trend-pill up">استعلام مستقیم DB</span>
+                    <span>موتور پایگاه داده فعال</span>
+                </div>
+            </div>
+
+            <!-- KPI 2: Media Storage Size -->
+            <div class="df-stat-card emerald">
+                <div class="df-stat-card-top">
+                    <span class="df-stat-label">فایل‌های پیوست و رسانه (Media)</span>
+                    <div class="df-stat-icon-wrap">📁</div>
+                </div>
+                <div class="df-stat-value">{{ media_size|filesizeformat }}</div>
+                <div class="df-stat-footer">
+                    <span class="df-trend-pill up">مسیر Media</span>
+                    <span>اسناد و تصاویر ثبت‌شده</span>
+                </div>
+            </div>
+
+            <!-- KPI 3: Server Free Disk Space -->
+            <div class="df-stat-card purple">
+                <div class="df-stat-card-top">
+                    <span class="df-stat-label">فضای آزاد دیسک سرور</span>
+                    <div class="df-stat-icon-wrap">💾</div>
+                </div>
+                <div class="df-stat-value">{{ disk_free|filesizeformat }}</div>
+                <div class="df-stat-footer">
+                    <span class="df-trend-pill {% if disk_free_percent < 20 %}down{% else %}up{% endif %}">
+                        {{ disk_free_percent }}٪ آزاد
+                    </span>
+                    <span>از کل {{ disk_total|filesizeformat }}</span>
+                </div>
+            </div>
+
+            <!-- KPI 4: Ready Backups Count -->
+            <div class="df-stat-card amber">
+                <div class="df-stat-card-top">
+                    <span class="df-stat-label">نسخه‌های آماده بازیابی</span>
+                    <div class="df-stat-icon-wrap">📦</div>
+                </div>
+                <div class="df-stat-value">{{ successful_backups_count }} نسخه</div>
+                <div class="df-stat-footer">
+                    <span class="df-trend-pill up">آماده Disaster Recovery</span>
+                    <span>{{ running_backups_count }} در حال اجرا</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Dashboard Body (Left: Storage Monitor & Table, Right: Schedules & Destinations) -->
+        <div class="df-dash-main-grid">
+
+            <!-- ================= LEFT COLUMN ================= -->
+            <div>
+
+                <!-- Card 1: Real Disk & Storage Capacity Distribution -->
+                <div class="df-dash-card">
+                    <div class="df-dash-card-header">
+                        <div>
+                            <h2>
+                                <span>📊</span>
+                                <span>توزیع مصرف و ظرفیت پارتیشن سرور</span>
+                            </h2>
+                        </div>
+                        <div style="font-size: 13px; color: var(--df-text-muted);">
+                            <span>کل فضای دیسک: </span>
+                            <strong style="color: var(--df-text-main);">{{ disk_total|filesizeformat }}</strong>
+                        </div>
+                    </div>
+
+                    <!-- Visual Segmented Bar -->
+                    <div class="df-storage-progress-track">
+                        <div class="df-storage-seg-db" style="width: {% widthratio db_size disk_total 100 %}%;" title="پایگاه داده: {{ db_size|filesizeformat }}"></div>
+                        <div class="df-storage-seg-media" style="width: {% widthratio media_size disk_total 100 %}%;" title="پیوست‌ها: {{ media_size|filesizeformat }}"></div>
+                        <div class="df-storage-seg-backups" style="width: {% widthratio total_backups_size disk_total 100 %}%;" title="آرشیوهای پشتیبان: {{ total_backups_size|filesizeformat }}"></div>
+                    </div>
+
+                    <!-- Storage Legend -->
+                    <div class="df-storage-legend">
+                        <div class="df-legend-item">
+                            <span class="df-legend-dot" style="background: #2563eb;"></span>
+                            <span>پایگاه داده: <strong>{{ db_size|filesizeformat }}</strong></span>
+                        </div>
+                        <div class="df-legend-item">
+                            <span class="df-legend-dot" style="background: #10b981;"></span>
+                            <span>فایل‌های مدیا: <strong>{{ media_size|filesizeformat }}</strong></span>
+                        </div>
+                        <div class="df-legend-item">
+                            <span class="df-legend-dot" style="background: #8b5cf6;"></span>
+                            <span>آرشیوهای پشتیبان: <strong>{{ total_backups_size|filesizeformat }}</strong></span>
+                        </div>
+                        <div class="df-legend-item">
+                            <span class="df-legend-dot" style="background: #cbd5e1;"></span>
+                            <span>فضای آزاد دیسک: <strong>{{ disk_free|filesizeformat }} ({{ disk_free_percent }}٪)</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- 3 Real Metric Subcards -->
+                    <div class="df-chart-subcards">
+                        <div class="df-subcard-item">
+                            <div class="df-subcard-val">
+                                <span>🏢</span>
+                                <span>{{ local_backups_count }} نسخه</span>
+                            </div>
+                            <div class="df-subcard-lbl">ذخیره‌سازی روی سرور محلی</div>
+                        </div>
+
+                        <div class="df-subcard-item green">
+                            <div class="df-subcard-val">
+                                <span>🌐</span>
+                                <span>{{ destinations|length }} مقصد</span>
+                            </div>
+                            <div class="df-subcard-lbl">مقاصد شبکه و ابری (S3 / SFTP)</div>
+                        </div>
+
+                        <div class="df-subcard-item orange">
+                            <div class="df-subcard-val">
+                                <span>🔒</span>
+                                <span>{{ encrypted_backups_count }} نسخه</span>
+                            </div>
+                            <div class="df-subcard-lbl">رمزنگاری امن AES-256</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Real Backups Manager Table -->
+                <div class="df-dash-card">
+                    <div class="df-dash-card-header">
+                        <div>
+                            <h2>
+                                <span>📦</span>
+                                <span>آرشیو و نسخه‌های پشتیبان (Backups Manager)</span>
+                            </h2>
+                        </div>
+                        <div class="df-table-search">
+                            <input type="text" id="df-table-search-input" placeholder="جستجوی نام یا تاریخ پشتیبان...">
+                            <span class="df-table-search-icon">🔍</span>
+                        </div>
+                    </div>
+
+                    <div class="df-modern-table-wrap">
+                        <table class="df-modern-table" id="df-backups-table">
+                            <thead>
+                                <tr>
+                                    <th>شناسه</th>
+                                    <th>نام فایل و جزئیات آرشیو</th>
+                                    <th>تاریخ ایجاد</th>
+                                    <th>حجم</th>
+                                    <th>وضعیت</th>
+                                    <th>عملیات</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for backup in backups %}
+                                <tr class="df-backup-row" data-search="{{ backup.filename }} {{ backup.created_at }}">
+                                    <td style="font-weight: 700; color: var(--df-text-light);">
+                                        #{{ backup.pk|stringformat:"05d" }}
+                                    </td>
+                                    <td>
+                                        <div class="df-file-cell">
+                                            <div class="df-file-icon-box">📦</div>
+                                            <div>
+                                                <div class="df-file-title">{{ backup.filename }}</div>
+                                                <div class="df-file-tags">
+                                                    {% if backup.is_encrypted %}
+                                                    <span class="df-tag-pill enc">🔒 AES-256</span>
+                                                    {% endif %}
+                                                    {% if backup.includes_media %}
+                                                    <span class="df-tag-pill">📁 همراه با مدیا</span>
+                                                    {% endif %}
+                                                    <span class="df-tag-pill">{{ backup.get_destination_display }}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td style="color: var(--df-text-muted);">
+                                        {{ backup.created_at|date:"Y/m/d - H:i" }}
+                                    </td>
+                                    <td style="font-weight: 700;">
+                                        {{ backup.size|default:0|filesizeformat }}
+                                    </td>
+                                    <td>
+                                        {% if backup.status == 'SUCCESS' %}
+                                        <span class="df-status-badge success">● سالم و آماده</span>
+                                        {% elif backup.status == 'FAILED' %}
+                                        <span class="df-status-badge failed">● خطا در فرآیند</span>
+                                        {% else %}
+                                        <span class="df-status-badge running">● در حال پردازش</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="df-table-actions">
+                                            {% if backup.status == 'SUCCESS' %}
+                                            <a href="{% url 'admin:backup_backup_download' backup.pk %}" class="df-icon-btn download" title="دانلود فایل پشتیبان .dfbak">
+                                                <span>⬇</span>
+                                                <span>دانلود</span>
+                                            </a>
+                                            <a href="{% url 'admin:backup_backup_restore' backup.pk %}" class="df-icon-btn restore" title="بازیابی پایگاه داده از این نسخه">
+                                                <span>🔄</span>
+                                                <span>بازیابی</span>
+                                            </a>
+                                            {% endif %}
+                                            <button type="button" class="df-icon-btn delete" onclick="confirmDelete('{{ backup.pk }}', '{{ backup.filename }}')" title="حذف این نسخه">
+                                                <span>🗑</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" style="text-align: center; padding: 40px; color: var(--df-text-muted);">
+                                        هنوز نسخه پشتیبانی ایجاد نشده است. با کلیک بر روی <strong>«ایجاد پشتیبان سریع»</strong> اولین نسخه را تهیه کنید.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ================= RIGHT COLUMN (Real Logical Data) ================= -->
+            <div>
+
+                <!-- Card 3: Real Automated Backup Schedules -->
+                <div class="df-dash-card">
+                    <div class="df-dash-card-header">
+                        <h3>
+                            <span>⏱️</span>
+                            <span>زمان‌بندی‌های خودکار</span>
+                        </h3>
+                        <a href="/admin/backup/backupschedule/add/" class="df-icon-btn download" style="font-size: 11.5px; padding: 3px 8px;">
+                            + جدید
+                        </a>
+                    </div>
+
+                    {% if schedules %}
+                        {% for sch in schedules %}
+                        <div class="df-list-card-item">
+                            <div>
+                                <div class="df-list-item-title">{{ sch.name }}</div>
+                                <div class="df-list-item-sub">{{ sch.get_frequency_display }} • ساعت {{ sch.execution_time|time:"H:i" }}</div>
+                            </div>
+                            <div>
+                                {% if sch.enabled %}
+                                <span class="df-status-badge success">فعال</span>
+                                {% else %}
+                                <span class="df-status-badge failed">غیرفعال</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p style="font-size: 12.5px; color: var(--df-text-muted); margin: 0; text-align: center; padding: 12px 0;">
+                            هیچ زمان‌بندی خودکاری تعریف نشده است.
+                        </p>
+                    {% endif %}
+                </div>
+
+                <!-- Card 4: Real Network & Cloud Destinations -->
+                <div class="df-dash-card">
+                    <div class="df-dash-card-header">
+                        <h3>
+                            <span>🌐</span>
+                            <span>مقاصد ذخیره‌سازی ابری / شبکه</span>
+                        </h3>
+                        <a href="/admin/backup/backupstoragedestination/add/" class="df-icon-btn download" style="font-size: 11.5px; padding: 3px 8px;">
+                            + جدید
+                        </a>
+                    </div>
+
+                    {% if destinations %}
+                        {% for dest in destinations %}
+                        <div class="df-list-card-item">
+                            <div>
+                                <div class="df-list-item-title">{{ dest.name }}</div>
+                                <div class="df-list-item-sub">{{ dest.get_backend_type_display }} • {{ dest.host|default:"S3 Bucket" }}</div>
+                            </div>
+                            <span class="df-tag-pill">{{ dest.get_backend_type_display }}</span>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p style="font-size: 12.5px; color: var(--df-text-muted); margin: 0; text-align: center; padding: 12px 0;">
+                            آرشیوها به صورت محلی در سرور ذخیره می‌شوند (هیچ مقصد ابری متصل نیست).
+                        </p>
+                    {% endif %}
+                </div>
+
+                <!-- Card 5: Real Recent Restore Executions -->
+                <div class="df-dash-card">
+                    <div class="df-dash-card-header">
+                        <h3>
+                            <span>🔄</span>
+                            <span>تاریخچه آخرین بازیابی‌ها</span>
+                        </h3>
+                        <a href="{% url 'admin:backup_restore_changelist' %}" class="df-icon-btn download" style="font-size: 11.5px; padding: 3px 8px;">
+                            مشاهده همه
+                        </a>
+                    </div>
+
+                    {% if recent_restores %}
+                        {% for r in recent_restores %}
+                        <div class="df-list-card-item">
+                            <div>
+                                <div class="df-list-item-title">{{ r.archive_filename }}</div>
+                                <div class="df-list-item-sub">{{ r.created_at|date:"Y/m/d - H:i" }} • {{ r.requested_by.get_full_name|default:r.requested_by.username|default:"مدیر سیستم" }}</div>
+                            </div>
+                            <div>
+                                {% if r.status == 'SUCCESS' %}
+                                <span class="df-status-badge success">موفق</span>
+                                {% elif r.status == 'FAILED' %}
+                                <span class="df-status-badge failed">ناموفق</span>
+                                {% else %}
+                                <span class="df-status-badge running">در حال اجرا</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <p style="font-size: 12.5px; color: var(--df-text-muted); margin: 0; text-align: center; padding: 12px 0;">
+                            هنوز هیچ عملیات بازیابی‌ای ثبت نشده است.
+                        </p>
+                    {% endif %}
+                </div>
+
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+<!-- ================= MODALS ================= -->
+
+<!-- 1. One-Click Quick Backup Modal -->
+<div class="df-modal-backdrop" id="createModal">
+    <div class="df-modal-window">
+        <div class="df-modal-header">
+            <h3>
+                <span>⚡</span>
+                <span>ایجاد پشتیبان سریع (One-Click Backup)</span>
+            </h3>
+            <button type="button" class="df-modal-close" onclick="closeModal('createModal')">✕</button>
+        </div>
+        <form method="post" action="{% url 'backup_workspace' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="create_backup">
+
+            <div class="df-modal-body">
+                <label class="df-switch-modern">
+                    <span>شامل فایل‌های پیوست و چندرسانه‌ای (Media)</span>
+                    <input type="checkbox" name="includes_media" checked>
+                </label>
+
+                <label class="df-switch-modern">
+                    <span>رمزنگاری امن داده‌ها با الگوریتم AES-256-GCM</span>
+                    <input type="checkbox" name="is_encrypted" {% if encryption_enabled %}checked{% endif %}>
+                </label>
+
+                <div class="df-form-row-modern">
+                    <label for="id_destination_modal">مقصد ذخیره‌سازی:</label>
+                    <select name="destination" id="id_destination_modal" class="df-select-modern">
+                        <option value="LOCAL" selected>سرور دلفین فلو (ذخیره محلی)</option>
+                        <option value="BOTH">هر دو (محلی + ارسال به شبکه / کلود S3)</option>
+                        <option value="NETWORK">فقط مقصد دوردست شبکه یا آبجکت استوریج</option>
+                    </select>
+                </div>
+
+                {% if destinations %}
+                <div class="df-form-row-modern">
+                    <label for="id_network_storage_modal">مقصد شبکه یا ابری (S3 / SFTP):</label>
+                    <select name="network_storage_id" id="id_network_storage_modal" class="df-select-modern">
+                        {% for dest in destinations %}
+                        <option value="{{ dest.pk }}">{{ dest.name }} ({{ dest.get_backend_type_display }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="df-modal-footer">
+                <button type="button" class="df-btn-secondary" onclick="closeModal('createModal')">انصراف</button>
+                <button type="submit" class="df-btn-primary">ایجاد پشتیبان سریع</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 2. Import External Archive Modal -->
+<div class="df-modal-backdrop" id="importModal">
+    <div class="df-modal-window">
+        <div class="df-modal-header">
+            <h3>
+                <span>📥</span>
+                <span>ورود فایل پشتیبان خارجی (.dfbak)</span>
+            </h3>
+            <button type="button" class="df-modal-close" onclick="closeModal('importModal')">✕</button>
+        </div>
+        <form method="post" enctype="multipart/form-data" action="{% url 'backup_workspace' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="import_backup">
+
+            <div class="df-modal-body">
+                <div style="border: 2px dashed var(--df-card-border); border-radius: 12px; padding: 28px 18px; text-align: center; cursor: pointer; background: var(--df-dash-bg);" onclick="document.getElementById('id_backup_file_modal').click();">
+                    <div style="font-size: 38px; margin-bottom: 6px;">📤</div>
+                    <div style="font-weight: 700; color: var(--df-text-main); margin-bottom: 4px;" id="df-import-file-name">برای انتخاب فایل .dfbak کلیک کنید</div>
+                    <div style="font-size: 12px; color: var(--df-text-muted);">ساختار آرشیو، مانیفست و چک‌سام به صورت خودکار اعتبارسنجی می‌شوند</div>
+                    <input type="file" name="backup_file" id="id_backup_file_modal" accept=".dfbak" style="display: none;" onchange="document.getElementById('df-import-file-name').textContent = this.files[0].name;">
+                </div>
+            </div>
+
+            <div class="df-modal-footer">
+                <button type="button" class="df-btn-secondary" onclick="closeModal('importModal')">انصراف</button>
+                <button type="submit" class="df-btn-primary" style="background: var(--df-success);">اعتبارسنجی و ثبت</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 3. Retention Policy Modal -->
+<div class="df-modal-backdrop" id="retentionModal">
+    <div class="df-modal-window">
+        <div class="df-modal-header">
+            <h3>
+                <span>⚙️</span>
+                <span>تنظیمات پاک‌سازی خودکار</span>
+            </h3>
+            <button type="button" class="df-modal-close" onclick="closeModal('retentionModal')">✕</button>
+        </div>
+        <form method="post" action="{% url 'backup_workspace' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="update_retention">
+
+            <div class="df-modal-body">
+                <label class="df-switch-modern">
+                    <span>فعال بودن سیاست پاک‌سازی و حذف دوره‌ای</span>
+                    <input type="checkbox" name="enabled" {% if retention_policy.enabled %}checked{% endif %}>
+                </label>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 12px;">
+                    <div class="df-form-row-modern">
+                        <label>حداقل تعداد نسخه‌های نگهداری:</label>
+                        <input type="number" name="keep_last" value="{{ retention_policy.keep_last }}" min="0" class="df-input-modern">
+                    </div>
+                    <div class="df-form-row-modern">
+                        <label>حداکثر روزهای نگهداری:</label>
+                        <input type="number" name="keep_days" value="{{ retention_policy.keep_days }}" min="0" class="df-input-modern">
+                    </div>
+                </div>
+                <p style="font-size: 11.5px; color: var(--df-text-muted); margin-top: 6px;">
+                    آرشیوهایی حذف می‌شوند که هر دو شرط انقضا را داشته باشند تا پایداری داده‌ها تضمین شود.
+                </p>
+            </div>
+
+            <div class="df-modal-footer">
+                <button type="button" class="df-btn-secondary" onclick="closeModal('retentionModal')">انصراف</button>
+                <button type="submit" class="df-btn-primary">ذخیره سیاست</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 4. Delete Confirmation Modal -->
+<div class="df-modal-backdrop" id="deleteModal">
+    <div class="df-modal-window">
+        <div class="df-modal-header">
+            <h3 style="color: var(--df-danger);">
+                <span>🗑️</span>
+                <span>تایید حذف نسخه پشتیبان</span>
+            </h3>
+            <button type="button" class="df-modal-close" onclick="closeModal('deleteModal')">✕</button>
+        </div>
+        <form method="post" action="{% url 'backup_workspace' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete_backup">
+            <input type="hidden" name="backup_id" id="delete_backup_id">
+
+            <div class="df-modal-body">
+                <p style="margin: 0 0 10px 0; font-size: 13.5px; color: var(--df-text-main);">
+                    آیا از حذف دائم فایل پشتیبان زیر اطمینان دارید؟
+                </p>
+                <div style="padding: 10px 14px; background: var(--df-dash-bg); border-radius: 8px; font-weight: 700; font-size: 13px; color: var(--df-text-main); font-family: monospace;" id="delete_backup_name"></div>
+                <p style="margin: 10px 0 0 0; font-size: 12px; color: var(--df-danger);">
+                    ⚠️ این عملیات فایل را از دیسک محلی و مقاصد شبکه پاک کرده و غیرقابل بازگشت است.
+                </p>
+            </div>
+
+            <div class="df-modal-footer">
+                <button type="button" class="df-btn-secondary" onclick="closeModal('deleteModal')">انصراف</button>
+                <button type="submit" class="df-btn-primary" style="background: var(--df-danger);">حذف قطعی</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+}
+
+function closeModal(id) {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('active');
+}
+
+function confirmDelete(id, name) {
+    document.getElementById('delete_backup_id').value = id;
+    document.getElementById('delete_backup_name').textContent = name;
+    openModal('deleteModal');
+}
+
+// Close modal on backdrop click
+document.querySelectorAll('.df-modal-backdrop').forEach(modal => {
+    modal.addEventListener('click', function(e) {
+        if (e.target === this) {
+            this.classList.remove('active');
+        }
+    });
+});
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.df-modal-backdrop.active').forEach(modal => {
+            modal.classList.remove('active');
+        });
+    }
+});
+
+// Real-time table search filter
+document.getElementById('df-table-search-input')?.addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    const rows = document.querySelectorAll('.df-backup-row');
+    rows.forEach(row => {
+        const text = (row.getAttribute('data-search') || '').toLowerCase();
+        row.style.display = text.includes(q) ? '' : 'none';
+    });
+});
+</script>
+
+{% endblock %}

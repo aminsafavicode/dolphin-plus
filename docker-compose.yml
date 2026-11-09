@@ -1,0 +1,133 @@
+services:
+
+  postgres:
+    image: postgres:16
+    container_name: dolphin-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-dolphinflow}
+      POSTGRES_USER: ${DB_USER:-dolphin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dolphin_password}
+      TZ: ${TZ:-Asia/Tehran}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-dolphin} -d ${DB_NAME:-dolphinflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dolphin-network
+
+  redis:
+    image: redis:7
+    container_name: dolphin-redis
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - dolphin-network
+
+  web:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dolphin-web
+    restart: unless-stopped
+    command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+      - RUN_MIGRATIONS=true
+      - COLLECT_STATIC=true
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,web
+    volumes:
+      - ./backend:/app
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+      - backup_data:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - dolphin-network
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dolphin-celery-worker
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "worker", "-l", "info", "--concurrency=4"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+      - RUN_MIGRATIONS=false
+      - COLLECT_STATIC=false
+    volumes:
+      - ./backend:/app
+      - media_data:/app/media
+      - backup_data:/app/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    networks:
+      - dolphin-network
+
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dolphin-celery-beat
+    restart: unless-stopped
+    command: ["celery", "-A", "config", "beat", "-l", "info"]
+    env_file:
+      - ./backend/.env
+    environment:
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+      - RUN_MIGRATIONS=false
+      - COLLECT_STATIC=false
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    networks:
+      - dolphin-network
+
+networks:
+  dolphin-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_data:
+  media_data:
+  backup_data:

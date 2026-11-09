@@ -1,0 +1,248 @@
+{% load static %}
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ print_data.title }}</title>
+  <style>
+    @font-face {
+      font-family: 'YekanBakh';
+      src: url('{% static "operator_panel/fonts/YekanBakhFaNum-VF.woff2" %}') format('woff2-variations'),
+           url('{% static "operator_panel/fonts/YekanBakhFaNum-VF.woff2" %}') format('woff2');
+      font-weight: 100 900;
+      font-style: normal;
+      font-display: swap;
+    }
+    @page {
+      size: {{ print_data.page_size }} {% if print_data.orientation == "LANDSCAPE" %}landscape{% else %}portrait{% endif %};
+      margin: {% if print_data.page_size == "A5" %}7mm{% else %}10mm{% endif %};
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: 'YekanBakh', -apple-system, BlinkMacSystemFont, Tahoma, Arial, sans-serif;
+      font-size: 13px;
+      line-height: 1.7;
+      -webkit-font-smoothing: antialiased;
+    }
+    .toolbar {
+      max-width: 960px;
+      margin: 20px auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-start;
+      padding: 0 14px;
+    }
+    .toolbar a {
+      color: #334155;
+      text-decoration: none;
+      padding: 8px 16px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s ease, border-color .15s ease;
+    }
+    .toolbar a:hover {
+      background: #f1f5f9;
+      border-color: #cbd5e1;
+    }
+    .toolbar a.btn-print {
+      background: #2563eb;
+      color: #ffffff;
+      border-color: #2563eb;
+      font-weight: 600;
+    }
+    .toolbar a.btn-print:hover {
+      background: #1d4ed8;
+      border-color: #1d4ed8;
+    }
+    .print-spec {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      color: #64748b;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      font-size: 12px;
+    }
+    .sheet {
+      width: min(960px, calc(100% - 28px));
+      min-height: 700px;
+      margin: 0 auto 36px;
+      padding: 40px 48px;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(15, 23, 42, 0.06);
+    }
+    .sheet.page-a5.orientation-portrait { width: min(560px, calc(100% - 28px)); min-height: 792px; }
+    .sheet.page-a5.orientation-landscape { width: min(792px, calc(100% - 28px)); min-height: 560px; }
+    header {
+      border-bottom: 2px solid #0f172a;
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+    .header-text, .footer-text { white-space: pre-line; color: #64748b; font-size: 12px; }
+    h1 { font-size: 20px; font-weight: 700; margin: 4px 0; color: #0f172a; }
+    .subtitle { font-size: 13px; color: #64748b; margin: 0; }
+    .metadata {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 18px;
+      padding: 6px 0 10px;
+      color: #475569;
+      font-size: 12px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .section { margin: 16px 0; }
+    h2 {
+      font-size: 14px;
+      font-weight: 600;
+      background: #f8fafc;
+      padding: 6px 10px;
+      border-right: 3px solid #2563eb;
+      margin: 0 0 8px;
+      border-radius: 0 6px 6px 0;
+      color: #0f172a;
+    }
+    h3 { font-size: 13px; font-weight: 600; margin: 8px 0 4px; color: #1e293b; }
+    .section-items {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px 12px;
+    }
+    .sheet.page-a5.orientation-portrait .section-items { grid-template-columns: minmax(0, 1fr); gap: 2px 6px; }
+    .sheet.page-a5.orientation-landscape .section-items { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; }
+    .sheet.page-a5 { font-size: 11.5px; line-height: 1.55; padding: 26px 28px; }
+    .sheet.page-a5 h1 { font-size: 17px; }
+    .sheet.page-a5 .subtitle { font-size: 11px; }
+    .sheet.page-a5 .metadata { gap: 4px 10px; padding: 4px 0 6px; font-size: 11px; }
+    .sheet.page-a5 .section { margin: 10px 0; }
+    .sheet.page-a5 h2 { font-size: 12px; padding: 4px 6px; margin-bottom: 5px; }
+    .sheet.page-a5 h3 { font-size: 11px; margin: 6px 0 3px; }
+    .sheet.page-a5 .field { column-gap: 6px; padding: 3px 2px; }
+    .sheet.page-a5 table { margin: 6px 0 10px; }
+    .sheet.page-a5 th, .sheet.page-a5 td { padding: 3px 5px; font-size: 11px; }
+    .sheet.page-a5 .group-block { margin: 6px 0; padding: 6px 8px; }
+    .sheet.page-a5 .signatures { gap: 10px; margin-top: 18px; }
+    .sheet.page-a5 .signature { min-height: 46px; font-size: 11px; }
+    .sheet.page-a5 footer { margin-top: 12px; }
+    .group-block { grid-column: 1 / -1; }
+    .field {
+      display: grid;
+      grid-template-columns: max-content minmax(0, 1fr);
+      align-items: baseline;
+      column-gap: 8px;
+      border: 0;
+      border-bottom: 1px solid #f1f5f9;
+      padding: 5px 3px;
+      min-width: 0;
+      break-inside: avoid;
+    }
+    .field.field-wide-number,
+    .field.field-full-width { grid-column: 1 / -1; }
+    .field.field-half-width { grid-column: span 2; }
+    .field-label { display: inline; font-weight: 600; color: #475569; margin: 0; font-size: 12px; }
+    .field-value { min-width: 0; overflow-wrap: anywhere; white-space: pre-line; color: #0f172a; font-weight: 400; }
+    .keep-value-together { white-space: nowrap; overflow-wrap: normal; word-break: keep-all; font-weight: 600; }
+    .boolean-mark { display: inline-block; width: 13px; height: 13px; border: 1px solid #475569; border-radius: 3px; vertical-align: -2px; text-align: center; line-height: 12px; }
+    .boolean-mark.is-checked { background: #2563eb; border-color: #2563eb; color: #ffffff; }
+    .boolean-mark.is-checked::after { content: "✓"; font-size: 10px; font-weight: bold; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 12px; }
+    th, td { border: 1px solid #e2e8f0; padding: 6px 8px; text-align: right; vertical-align: middle; overflow-wrap: anywhere; }
+    th { background: #f8fafc; font-weight: 600; color: #334155; }
+    tbody tr:nth-child(even) { background: #fafafa; }
+    .group-block { border: 1px solid #e2e8f0; border-radius: 8px; margin: 8px 0; padding: 10px 12px; break-inside: avoid; background: #fafafa; }
+    .empty { color: #94a3b8; }
+    .signatures { display: grid; grid-template-columns: repeat({{ print_data.signature_count }}, minmax(0, 1fr)); gap: 16px; margin-top: 28px; break-inside: avoid; }
+    .signature { border-top: 1px solid #94a3b8; padding-top: 6px; text-align: center; min-height: 60px; font-size: 12px; color: #475569; }
+    footer { margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 8px; color: #64748b; font-size: 11px; white-space: pre-line; }
+    @media print {
+      body { background: white; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .toolbar { display: none !important; }
+      .sheet { width: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; box-shadow: none !important; border: none !important; border-radius: 0 !important; }
+      .sheet.page-a5 { width: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; }
+      .section, .group-block { break-inside: auto; page-break-inside: auto; }
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+      tr { break-inside: avoid; page-break-inside: avoid; }
+      .field { break-inside: avoid; page-break-inside: avoid; }
+    }
+    @media (max-width: 640px) {
+      .sheet { padding: 20px 16px; }
+      .section-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+  </style>
+</head>
+<body>
+  <nav class="toolbar">
+    <a href="{% url 'operator_panel:workflow_instance' instance.pk %}">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+      بازگشت به فرایند
+    </a>
+    <a href="#" class="btn-print" onclick="window.print(); return false;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      چاپ از مرورگر
+    </a>
+    <span class="print-spec"><strong>اندازه کاغذ:</strong> {{ print_data.page_size }}</span>
+    <span class="print-spec"><strong>جهت صفحه:</strong> {% if print_data.orientation == "LANDSCAPE" %}افقی{% else %}عمودی{% endif %}</span>
+  </nav>
+  <main class="sheet page-{{ print_data.page_size|lower }} orientation-{{ print_data.orientation|lower }}">
+    <header>
+      {% if print_data.header_text %}<div class="header-text">{{ print_data.header_text }}</div>{% endif %}
+      <h1>{{ print_data.title }}</h1>
+      {% if print_data.subtitle %}<p class="subtitle">{{ print_data.subtitle }}</p>{% endif %}
+    </header>
+
+    <div class="metadata">
+      {% if print_data.show_workflow_name and print_data.workflow_name %}<span><strong>فرایند:</strong> {{ print_data.workflow_name }}</span>{% endif %}
+      {% if print_data.show_instance_number and print_data.instance_number %}<span><strong>شماره:</strong> {{ print_data.instance_number }}</span>{% endif %}
+      {% if print_data.show_created_at and print_data.created_at %}<span><strong>تاریخ ایجاد:</strong> {{ print_data.created_at|date:"Y/m/d H:i" }}</span>{% endif %}
+    </div>
+
+    {% for section in print_data.sections %}
+      <section class="section">
+        <h2>{{ section.title }}</h2>
+        <div class="section-items">
+          {% for item in section.items %}
+            {% if item.type == "field" %}
+              <div class="field{% if item.keep_value_together %} field-wide-number{% endif %}{% if item.print_width == 'FULL' or item.print_width == '12' %} field-full-width{% elif item.print_width == 'HALF' or item.print_width == '6' %} field-half-width{% endif %}">
+                <span class="field-label">{{ item.label }}:</span>
+                <div class="field-value{% if item.keep_value_together %} keep-value-together{% endif %}">{% if item.value != "" and item.value != None %}{% if item.is_boolean %}<span class="boolean-mark{% if item.boolean_checked %} is-checked{% endif %}" role="img" aria-label="{% if item.boolean_checked %}بله{% else %}خیر{% endif %}"></span>{% else %}{{ item.value }}{% endif %}{% else %}<span class="empty">—</span>{% endif %}</div>
+              </div>
+            {% elif item.type == "group" %}
+              {% include "operator_panel/partials/print_group.html" with item=item %}
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+    {% empty %}
+      <p class="empty">هیچ فیلد قابل چاپی برای این کاربر و این فرایند وجود ندارد.</p>
+    {% endfor %}
+
+    {% if print_data.show_signatures %}
+      <div class="signatures">
+        {% for number in "123456789"|make_list %}
+          {% if forloop.counter <= print_data.signature_count %}
+            <div class="signature">امضا / نام و تاریخ</div>
+          {% endif %}
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if print_data.footer_text %}<footer>{{ print_data.footer_text }}</footer>{% endif %}
+  </main>
+</body>
+</html>

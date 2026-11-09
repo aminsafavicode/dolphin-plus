@@ -1,0 +1,781 @@
+{% extends "admin/base_site.html" %}
+{% load i18n %}
+
+{% block content %}
+<style>
+.df-admin-dashboard {
+    direction: rtl;
+    text-align: right;
+    max-width: 1550px;
+    margin: 0 auto;
+}
+
+/* =========================================================
+   1. Welcome Banner
+   ========================================================= */
+.df-welcome-banner {
+    background: linear-gradient(135deg, #0b1329 0%, #1e3a8a 45%, #0369a1 100%);
+    border-radius: 20px;
+    padding: 20px 24px;
+    color: #ffffff;
+    margin-bottom: 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 14px 30px -8px rgba(11, 19, 41, 0.3);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.df-welcome-banner::after {
+    content: "🐬";
+    position: absolute;
+    left: 24px;
+    bottom: -20px;
+    font-size: 150px;
+    opacity: 0.07;
+    pointer-events: none;
+    user-select: none;
+}
+
+.df-welcome-title h2 {
+    font-size: 26px;
+    font-weight: 800;
+    margin: 0 0 8px 0;
+    color: #ffffff;
+    letter-spacing: -0.3px;
+}
+
+.df-welcome-title p {
+    font-size: 14.5px;
+    color: #cbd5e1;
+    margin: 0 0 8px 0;
+    line-height: 1.7;
+}
+
+.df-system-status-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.df-status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 12px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #f1f5f9;
+}
+
+.df-welcome-actions {
+    display: flex;
+    gap: 8px;
+    z-index: 2;
+}
+
+.df-welcome-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 22px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.14);
+    backdrop-filter: blur(10px);
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    transition: all 0.22s ease;
+}
+
+.df-welcome-btn:hover {
+    background: #ffffff;
+    color: #0b1329;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.df-welcome-btn.primary {
+    background: #38bdf8;
+    color: #0b1329;
+    border-color: #7dd3fc;
+}
+
+.df-welcome-btn.primary:hover {
+    background: #0284c7;
+    color: #ffffff;
+}
+
+/* =========================================================
+   2. KPI Metric Stat Cards
+   ========================================================= */
+.df-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.df-kpi-card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 14px 18px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: all 0.22s ease;
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    overflow: hidden;
+}
+
+.df-kpi-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 3px;
+    background: var(--card-border);
+    transition: background-color 0.2s;
+}
+
+.df-kpi-card:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+}
+
+.df-kpi-card.blue::before { background: linear-gradient(90deg, #2563eb, #38bdf8); }
+.df-kpi-card.emerald::before { background: linear-gradient(90deg, #059669, #34d399); }
+.df-kpi-card.purple::before { background: linear-gradient(90deg, #7c3aed, #a78bfa); }
+.df-kpi-card.amber::before { background: linear-gradient(90deg, #d97706, #fbbf24); }
+
+.df-kpi-info h4 {
+    margin: 0 0 6px 0;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--body-quiet-color);
+}
+
+.df-kpi-number {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--body-loud-color);
+    line-height: 1;
+    margin: 0 0 6px 0;
+}
+
+.df-kpi-desc {
+    font-size: 12px;
+    color: var(--body-quiet-color);
+    margin: 0;
+}
+
+.df-kpi-icon-wrap {
+    width: 52px;
+    height: 52px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    background: var(--darkened-bg);
+}
+
+.df-kpi-card.blue .df-kpi-icon-wrap { background: var(--darkened-bg); }
+.df-kpi-card.emerald .df-kpi-icon-wrap { background: var(--darkened-bg); }
+.df-kpi-card.purple .df-kpi-icon-wrap { background: var(--darkened-bg); }
+.df-kpi-card.amber .df-kpi-icon-wrap { background: var(--darkened-bg); }
+
+/* =========================================================
+   3. Smart Search & Filter Bar
+   ========================================================= */
+.df-filter-bar {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.df-search-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 280px;
+}
+
+.df-search-input-wrap span.search-icon {
+    font-size: 20px;
+    color: var(--body-quiet-color);
+}
+
+.df-search-input-wrap input {
+    width: 100%;
+    border: none !important;
+    background: transparent !important;
+    font-size: 15px !important;
+    font-weight: 500 !important;
+    color: var(--body-loud-color) !important;
+    padding: 6px 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.df-search-input-wrap input::placeholder {
+    color: var(--body-quiet-color);
+}
+
+.df-search-badge {
+    font-size: 12.5px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 9999px;
+    background: var(--darkened-bg);
+    color: var(--body-quiet-color);
+    border: 1px solid var(--card-border);
+}
+
+/* =========================================================
+   4. Integrated Workspaces
+   ========================================================= */
+.df-admin-category {
+    background: var(--card-bg);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--card-border);
+    transition: opacity 0.2s ease;
+}
+
+.df-admin-category-header {
+    border-bottom: 1px solid var(--card-border);
+    padding-bottom: 10px;
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.df-admin-category-header h2 {
+    margin: 0 0 6px;
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--body-loud-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.df-admin-category-header p {
+    color: var(--body-quiet-color);
+    margin: 0;
+    font-size: 13.5px;
+}
+
+.df-cat-badge {
+    font-size: 12px;
+    font-weight: 700;
+    background: var(--darkened-bg);
+    color: var(--link-fg);
+    padding: 4px 12px;
+    border-radius: 9999px;
+    border: 1px solid var(--card-border);
+}
+
+.df-admin-workspaces {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 8px;
+}
+
+.df-admin-workspace-card {
+    display: flex;
+    flex-direction: column;
+    padding: 14px 18px;
+    border-radius: 12px;
+    background: var(--darkened-bg);
+    color: inherit;
+    text-decoration: none;
+    border: 1px solid var(--card-border);
+    transition: all 0.22s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.df-admin-workspace-card:hover {
+    background: var(--card-bg);
+    border-color: var(--primary);
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+}
+
+.df-workspace-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.df-workspace-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    box-shadow: var(--shadow-sm);
+}
+
+.df-workspace-title-box strong {
+    font-size: 15.5px;
+    font-weight: 800;
+    color: var(--body-loud-color);
+    display: block;
+}
+
+.df-workspace-tag {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--link-fg);
+    background: var(--selected-row);
+    padding: 2px 8px;
+    border-radius: 6px;
+    display: inline-block;
+    margin-top: 2px;
+}
+
+.df-admin-workspace-card p {
+    color: var(--body-quiet-color);
+    font-size: 13px;
+    line-height: 1.7;
+    margin: 0;
+}
+
+/* =========================================================
+   5. App & Model Grids
+   ========================================================= */
+.df-admin-section {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--card-border);
+}
+
+.df-admin-section:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
+}
+
+.df-admin-section h3 {
+    font-size: 14.5px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    color: var(--body-loud-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.df-admin-section h3::before {
+    content: "";
+    width: 4px;
+    height: 16px;
+    background: var(--primary);
+    border-radius: 2px;
+    display: inline-block;
+}
+
+.df-admin-models {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 8px;
+}
+
+.df-admin-model-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: var(--darkened-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    color: var(--body-fg);
+    text-decoration: none;
+    font-size: 13.5px;
+    font-weight: 600;
+    transition: all 0.18s ease;
+    gap: 8px;
+}
+
+.df-admin-model-card:hover {
+    background: var(--selected-row);
+    border-color: var(--primary);
+    color: var(--link-fg);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-sm);
+}
+
+.df-model-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.df-add-mini-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    color: var(--link-fg);
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.15s ease;
+}
+
+.df-add-mini-btn:hover {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+    transform: scale(1.08);
+}
+
+.df-no-results {
+    display: none;
+    text-align: center;
+    padding: 50px 20px;
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px dashed var(--border-color);
+    color: var(--body-quiet-color);
+    margin-bottom: 24px;
+}
+
+.df-no-results span.icon {
+    font-size: 40px;
+    display: block;
+    margin-bottom: 10px;
+}
+</style>
+
+<div class="df-admin-dashboard">
+    <!-- Welcome Header Banner -->
+    <div class="df-welcome-banner">
+        <div class="df-welcome-title">
+            <h2>مرکز فرماندهی سامانه مدیریت دلفین فلو</h2>
+            <p>مدیریت جامع گردش‌کار سازمانی، کنترل سطوح دسترسی، طراحی فرم‌ها و پایش فرآیندها</p>
+            <div class="df-system-status-pills">
+                <span class="df-status-pill">
+                    <span class="df-status-dot"></span>
+                    داکر و پایگاه‌داده: متصل
+                </span>
+                <span class="df-status-pill">
+                    <span class="df-status-dot"></span>
+                    موتور Celery &amp; Redis: فعال
+                </span>
+                <span class="df-status-pill">
+                    ⚡ نسخه Enterprise
+                </span>
+            </div>
+        </div>
+        <div class="df-welcome-actions">
+            <a href="{% url 'backup_workspace' %}" class="df-welcome-btn" title="میز کار پشتیبان‌گیری و بازیابی اطلاعات">
+                <span>🛡️</span>
+                <span>میز کار پشتیبان‌گیری</span>
+            </a>
+            <a href="{% url 'operator_panel:dashboard' %}" class="df-welcome-btn primary">
+                <span>📋</span>
+                <span>ورود به کارتابل اپراتور</span>
+            </a>
+            <a href="{% url 'process_workspace_list' %}" class="df-welcome-btn">
+                <span>🧭</span>
+                <span>میز کار فرآیندها</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Live KPI Stat Cards -->
+    <div class="df-kpi-grid">
+        <a href="{% url 'process_workspace_list' %}" class="df-kpi-card blue">
+            <div class="df-kpi-info">
+                <h4>فرآیندهای گردش‌کار</h4>
+                <div class="df-kpi-number">{{ admin_kpis.workflows_count }}</div>
+                <p class="df-kpi-desc">فرآیند تعریف‌شده در سیستم</p>
+            </div>
+            <div class="df-kpi-icon-wrap">🧭</div>
+        </a>
+        <a href="{% url 'process_workspace_list' %}" class="df-kpi-card emerald">
+            <div class="df-kpi-info">
+                <h4>فرم‌های پویا و فیلدها</h4>
+                <div class="df-kpi-number">{{ admin_kpis.forms_count }}</div>
+                <p class="df-kpi-desc">قالب فرم فعال با لاجیک اعتبارسنجی</p>
+            </div>
+            <div class="df-kpi-icon-wrap">📋</div>
+        </a>
+        <a href="{% url 'device_catalog_workspace' %}" class="df-kpi-card purple">
+            <div class="df-kpi-info">
+                <h4>تجهیزات و مدل‌ها</h4>
+                <div class="df-kpi-number">{{ admin_kpis.devices_count }}</div>
+                <p class="df-kpi-desc">دستگاه و دارایی ثبت‌شده</p>
+            </div>
+            <div class="df-kpi-icon-wrap">📱</div>
+        </a>
+        <a href="{% url 'users_organization_workspace' %}" class="df-kpi-card amber">
+            <div class="df-kpi-info">
+                <h4>پرسنل و کاربران فعال</h4>
+                <div class="df-kpi-number">{{ admin_kpis.users_count }}</div>
+                <p class="df-kpi-desc">کاربر با دسترسی سیستمی</p>
+            </div>
+            <div class="df-kpi-icon-wrap">👥</div>
+        </a>
+        <a href="{% url 'backup_workspace' %}" class="df-kpi-card blue" style="border-top: 3px solid #0284c7;">
+            <div class="df-kpi-info">
+                <h4>نسخه‌های پشتیبان معتبر</h4>
+                <div class="df-kpi-number">{{ admin_kpis.backups_count }}</div>
+                <p class="df-kpi-desc">نسخه کامل آماده بازیابی اضطراری</p>
+            </div>
+            <div class="df-kpi-icon-wrap">🛡️</div>
+        </a>
+    </div>
+
+    <!-- Smart Live Filter Bar -->
+    <div class="df-filter-bar">
+        <div class="df-search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="df-search-input" placeholder="جستجوی سریع در ماژول‌ها، مدل‌ها و میزهای کار (فیلتر هوشمند آنی)..." autocomplete="off">
+        </div>
+        <div class="df-search-badge" id="df-search-counter">
+            آماده جستجو
+        </div>
+    </div>
+
+    <!-- Empty State for Search -->
+    <div class="df-no-results" id="df-no-results">
+        <span class="icon">🔍</span>
+        <h3>هیچ موردی مطابق با جستجوی شما یافت نشد</h3>
+        <p>لطفاً عبارت دیگری را جستجو فرمایید یا کادر جستجو را پاک کنید.</p>
+    </div>
+
+    <!-- Integrated Workspaces -->
+    <section class="df-admin-category" id="section-workspaces">
+        <div class="df-admin-category-header">
+            <div>
+                <h2>
+                    <span>🧰</span>
+                    <span>میز کارهای یکپارچه (Integrated Workspaces)</span>
+                </h2>
+                <p>محیط‌های تخصصی، گرافیکی و ویژوال برای طراحی سیستم بدون نیاز به کدنویسی</p>
+            </div>
+            <span class="df-cat-badge">۷ میز کار تخصصی</span>
+        </div>
+        <div class="df-admin-workspaces">
+            <a href="{% url 'backup_workspace' %}" class="df-admin-workspace-card df-searchable-item" data-keywords="backup restore پشتیبان بازیابی دیتابیس s3 رمزنگاری دیسک نگهداری dfbak ذخیره آرشیو">
+                <div class="df-workspace-header">
+                    <div class="df-workspace-icon">🛡️</div>
+                    <div class="df-workspace-title-box">
+                        <strong>Backup &amp; DR Workspace</strong>
+                        <span class="df-workspace-tag" style="background: rgba(14, 165, 233, 0.15); color: #0284c7;">پشتیبان‌گیری و تاب‌آوری</span>
+                    </div>
+                </div>
+                <p>ایجاد سریع نسخه کامل با یک کلیک، بارگذاری آرشیو خارجی، پایش ظرفیت دیسک و بازیابی فیل‌سیف.</p>
+            </a>
+            <a href="{% url 'process_workspace_list' %}" class="df-admin-workspace-card df-searchable-item" data-keywords="process فرآیند مراحل گراف گذار گردش کار">
+                <div class="df-workspace-header">
+                    <div class="df-workspace-icon">🧭</div>
+                    <div class="df-workspace-title-box">
+                        <strong>Process Workspace</strong>
+                        <span class="df-workspace-tag">طراحی فرآیند</span>
+                    </div>
+                </div>
+                <p>طراحی بصری مراحل، گراف گذارها و تعیین مسئول و ناظر هر مرحله به‌صورت یکپارچه.</p>
+            </a>
+            <a href="{% url 'access_security_workspace_list' %}" class="df-admin-workspace-card df-searchable-item" data-keywords="access security امنیت دسترسی ماتریس نقش فیلد مجوز">
+                <div class="df-workspace-header">
+                    <div class="df-workspace-icon">🔐</div>
+                    <div class="df-workspace-title-box">
+                        <strong>Access &amp; Security Workspace</strong>
+                        <span class="df-workspace-tag">امنیت و مجوزها</span>
+                    </div>
+                </div>
+                <p>مدیریت ماتریس دسترسی نقش‌ها، مراحل، فیلدهای فرم و گروه‌های تکرارشونده.</p>
+            </a>
+            <a href="{% url 'data_sources_workspace' %}" class="df-admin-workspace-card df-searchable-item" data-keywords="data sources لغت نامه دیتاسورس منابع داده لوک آپ">
+                <div class="df-workspace-header">
+                    <div class="df-workspace-icon">🗂</div>
+                    <div class="df-workspace-title-box">
+                        <strong>Data Sources Workspace</strong>
+                        <span class="df-workspace-tag">داده‌های پویا</span>
+                    </div>
+                </div>
+                <p>مدیریت لغت‌نامه‌ها و لوک‌آپ‌های داده‌ای پویا برای گزینه‌های انتخابی فرم‌ها.</p>
+            </a>
+            <a href="{% url 'device_catalog_workspace' %}" class="df-admin-workspace-card df-searchable-item" data-keywords="device catalog دستگاه قطعات مدل کاتالوگ تجهیزات شناسه">
+                <div class="df-workspace-header">
+                    <div class="df-workspace-icon">📱</div>
+                    <div class="df-workspace-title-box">
+                        <strong>Device Catalog Workspace</strong>
+                        <span class="df-workspace-tag">مدیریت تجهیزات</span>
+                    </div>
+                </div>
+                <p>کاتالوگ انواع دستگاه، مدل‌ها، قطعات تعمیری و شناسه‌های اختصاصی دارایی‌ها.</p>
+            </a>
+            <a href="{% url 'sla_calendar_workspace' %}" class="df-admin-workspace-card df-searchable-item" data-keywords="sla calendar تقویم کاری شیفت تعطیلات مهلت سررسید">
+                <div class="df-workspace-header">
+                    <div class="df-workspace-icon">⏱</div>
+                    <div class="df-workspace-title-box">
+                        <strong>SLA &amp; Calendar Workspace</strong>
+                        <span class="df-workspace-tag">زمان‌بندی و تعهدات</span>
+                    </div>
+                </div>
+                <p>تعریف تقویم کاری سازمانی، شیفت‌های هفتگی، تعطیلات رسمی و مهلت‌های مجاز هر گام.</p>
+            </a>
+            <a href="{% url 'users_organization_workspace' %}" class="df-admin-workspace-card df-searchable-item" data-keywords="users organization کاربران پرسنل سازمان سمت شغل چارت">
+                <div class="df-workspace-header">
+                    <div class="df-workspace-icon">👥</div>
+                    <div class="df-workspace-title-box">
+                        <strong>Users &amp; Organization Workspace</strong>
+                        <span class="df-workspace-tag">ساختار انسانی</span>
+                    </div>
+                </div>
+                <p>مدیریت حساب کاربران، عناوین شغلی، چارت سازمانی و ترجیحات پرسنل.</p>
+            </a>
+        </div>
+    </section>
+
+    <!-- App Categories -->
+    {% for category_key, category in admin_structure.items %}
+    <section class="df-admin-category df-category-block" data-category="{{ category_key }}">
+        <div class="df-admin-category-header">
+            <div>
+                <h2>
+                    <span>{{ category.icon }}</span>
+                    <span>{{ category.label }}</span>
+                </h2>
+                <p>{{ category.description }}</p>
+            </div>
+            <span class="df-cat-badge">دسته ماژول</span>
+        </div>
+        {% for section_key, section in category.sections.items %}
+        <div class="df-admin-section">
+            <h3>{{ section.label }}</h3>
+            <div class="df-admin-models">
+                {% for model in section.models %}
+                <div class="df-admin-model-card df-searchable-item" data-keywords="{{ model.name }} {{ category.label }} {{ section.label }}">
+                    <a href="{{ model.admin_url }}" style="color: inherit; text-decoration: none; flex: 1;">
+                        <span>{{ model.name }}</span>
+                    </a>
+                    <div class="df-model-actions">
+                        {% if model.add_url %}
+                        <a href="{{ model.add_url }}" class="df-add-mini-btn" title="افزودن {{ model.name }} جدید">+</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    </section>
+    {% endfor %}
+</div>
+
+<script>
+(function() {
+    const searchInput = document.getElementById('df-search-input');
+    const counterBadge = document.getElementById('df-search-counter');
+    const noResults = document.getElementById('df-no-results');
+    const items = document.querySelectorAll('.df-searchable-item');
+    const categories = document.querySelectorAll('.df-category-block');
+    const workspacesSection = document.getElementById('section-workspaces');
+
+    if (!searchInput) return;
+
+    // Focus with Ctrl + K or Slash
+    window.addEventListener('keydown', function(e) {
+        if ((e.ctrlKey && e.key.toLowerCase() === 'k') || (e.key === '/' && document.activeElement !== searchInput)) {
+            e.preventDefault();
+            searchInput.focus();
+            searchInput.select();
+        }
+    });
+
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim().toLowerCase();
+        let matchesCount = 0;
+
+        if (!query) {
+            items.forEach(el => el.style.display = '');
+            categories.forEach(cat => cat.style.display = '');
+            if (workspacesSection) workspacesSection.style.display = '';
+            noResults.style.display = 'none';
+            counterBadge.textContent = 'آماده جستجو';
+            counterBadge.style.background = '#f1f5f9';
+            counterBadge.style.color = '#64748b';
+            return;
+        }
+
+        items.forEach(el => {
+            const keywords = (el.getAttribute('data-keywords') || '') + ' ' + (el.textContent || '');
+            if (keywords.toLowerCase().includes(query)) {
+                el.style.display = '';
+                matchesCount++;
+            } else {
+                el.style.display = 'none';
+            }
+        });
+
+        // Hide empty categories
+        categories.forEach(cat => {
+            const visibleItems = cat.querySelectorAll('.df-searchable-item:not([style*="display: none"])');
+            cat.style.display = visibleItems.length > 0 ? '' : 'none';
+        });
+
+        // Check workspaces
+        if (workspacesSection) {
+            const visibleWorkspaces = workspacesSection.querySelectorAll('.df-searchable-item:not([style*="display: none"])');
+            workspacesSection.style.display = visibleWorkspaces.length > 0 ? '' : 'none';
+        }
+
+        if (matchesCount === 0) {
+            noResults.style.display = 'block';
+            counterBadge.textContent = 'موردی یافت نشد';
+            counterBadge.style.background = '#fee2e2';
+            counterBadge.style.color = '#b91c1c';
+        } else {
+            noResults.style.display = 'none';
+            counterBadge.textContent = matchesCount + ' مورد یافت شد';
+            counterBadge.style.background = '#ecfdf5';
+            counterBadge.style.color = '#065f46';
+        }
+    });
+})();
+</script>
+{% endblock %}

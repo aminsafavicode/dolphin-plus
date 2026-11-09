@@ -1,0 +1,1027 @@
+import os
+from pathlib import Path
+
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.http import FileResponse, Http404, JsonResponse
+from django.shortcuts import get_object_or_404
+from django.urls import reverse
+
+from .acceptance_queue_services import PendingAcceptanceQueueService
+from .authorization import WorkflowAuthorizationService
+from .form_file_models import FormFile
+from .file_share_authorization import can_share_file_field
+from .file_lifecycle_services import FileLifecycleService
+from .form_services import DynamicFormService
+from .models import RepeatableRow
+from .permission_context import PermissionContext
+from .form_draft_diff_services import RowReference, RowReferenceKind
+from .models import (
+    FormData,
+    FormDefinition,
+    FormField,
+    FormRepeatableGroup,
+    WorkflowInstance,
+    WorkflowMembership,
+    WorkflowPermission,
+)
+
+MAX_FILE_SIZE = 10 * 1024 * 1024
+
+
+def _current_form(instance):
+    return (
+        FormDefinition.objects
+        .filter(workflow=instance.workflow, is_active=True)
+        
+        .first()
+    )
+
+
+def prepare_submitted_data_for_files(*, instance, submitted_data, submitted_files):
+    """Make FILE-only repeatable rows visible to the normal form parser."""
+    post_data = submitted_data.copy()
+    form = _current_form(instance)
+    if form is None:
+        return post_data
+
+    file_fields = (
+        FormField.objects
+        .filter(
+            section__form=form,
+            is_active=True,
+            field_type="FILE",
+            repeatable_group__group_type=FormRepeatableGroup.GroupType.NORMAL,
+        )
+        .select_related("repeatable_group")
+    )
+
+    for field in file_fields:
+        prefix = f"{field.repeatable_group.code}_"
+        suffix = f"_{field.code}"
+        for key in submitted_files.keys():
+            if key.startswith(prefix) and key.endswith(suffix) and key not in post_data:
+                post_data[key] = ""
+    return post_data
+
+
+def _upload_present(upload):
+    return bool(upload and getattr(upload, "name", ""))
+
+
+def _validate_upload(upload, field):
+    if not _upload_present(upload):
+        return None
+    if upload.size > MAX_FILE_SIZE:
+        return f"حجم فایل «{field.label}» نباید بیشتر از {MAX_FILE_SIZE // (1024 * 1024)} مگابایت باشد."
+    return None
+
+
+def validate_uploaded_files(*, instance, user, submitted_data, submitted_files):
+    """Validate FILE fields before DynamicFormService persists normal form data."""
+    if instance.current_step_id is None:
+        return
+
+    form = _current_form(instance)
+    if form is None:
+        return
+
+    form_data = FormData.objects.filter(instance=instance).first()
+    existing = {}
+    if form_data:
+        existing = {
+            (item.field_id, item.row_id): item
+            for item in FormFile.objects.filter(form_data=form_data)
+        }
+
+    step = instance.current_step
+    permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=user)
+    errors = []
+
+    for section in form.sections.filter(is_active=True):
+        for field in section.fields.filter(
+            is_active=True,
+            repeatable_group__isnull=True,
+            field_type="FILE",
+        ):
+            upload = submitted_files.get(field.code)
+            if not permission_context.field(field).can_edit:
+                if _upload_present(upload):
+                    errors.append({
+                        "type": "field",
+                        "code": field.code,
+                        "label": field.label,
+                        "message": f"شما اجازه ویرایش فایل «{field.label}» را ندارید.",
+                    })
+                continue
+            error = _validate_upload(upload, field)
+            if error:
+                errors.append({
+                    "type": "field",
+                    "code": field.code,
+                    "label": field.label,
+                    "message": error,
+                })
+            elif field.is_required and not _upload_present(upload) and (field.pk, "") not in existing:
+                errors.append({
+                    "type": "field",
+                    "code": field.code,
+                    "label": field.label,
+                    "message": f"فایل «{field.label}» الزامی است.",
+                })
+
+        groups_by_parent = {}
+        for group in section.repeatable_groups.filter(
+            is_active=True,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+        ).order_by("parent_group_id", "order", "pk"):
+            groups_by_parent.setdefault(group.parent_group_id, []).append(group)
+
+        def validate_group(group, group_prefix=""):
+            group_can_edit = permission_context.group(group).can_edit
+            file_fields = list(
+                group.fields.filter(
+                    is_active=True,
+                    field_type="FILE",
+                )
+            )
+            persisted_row_ids = set(
+                str(row_id)
+                for row_id in RepeatableRow.objects.filter(
+                    instance=instance,
+                    group=group,
+                ).values_list("pk", flat=True)
+            )
+
+            row_indexes = set()
+            prefix = group_prefix + f"{group.code}_"
+            for key in submitted_data.keys():
+                if not key.startswith(prefix):
+                    continue
+                remainder = key[len(prefix):]
+                index, separator, _ = remainder.partition("_")
+                if separator and index.isdigit():
+                    row_indexes.add(int(index))
+
+            for index in sorted(row_indexes):
+                row_id_key = f"{prefix}{index}__id"
+                submitted_row_id = str(
+                    submitted_data.get(row_id_key, "") or ""
+                ).strip()
+                row_id = (
+                    submitted_row_id
+                    if submitted_row_id in persisted_row_ids
+                    else ""
+                )
+
+                for field in file_fields:
+                    key = f"{prefix}{index}_{field.code}"
+                    upload = submitted_files.get(key)
+                    if not group_can_edit or not permission_context.field(field).can_edit:
+                        if _upload_present(upload):
+                            errors.append({
+                                "type": "repeatable_field",
+                                "group_code": group.code,
+                                "field_code": field.code,
+                                "item_index": index,
+                                "message": f"شما اجازه ویرایش فایل «{field.label}» را ندارید.",
+                            })
+                        continue
+
+                    error = _validate_upload(upload, field)
+                    if error:
+                        errors.append({
+                            "type": "repeatable_field",
+                            "group_code": group.code,
+                            "field_code": field.code,
+                            "item_index": index,
+                            "message": error,
+                        })
+                    elif (
+                        field.is_required
+                        and not _upload_present(upload)
+                        and (field.pk, row_id) not in existing
+                    ):
+                        errors.append({
+                            "type": "repeatable_field",
+                            "group_code": group.code,
+                            "field_code": field.code,
+                            "item_index": index,
+                            "message": f"فایل «{field.label}» در ردیف {index + 1} الزامی است.",
+                        })
+
+                child_prefix = f"{prefix}{index}_"
+                for child_group in groups_by_parent.get(group.pk, []):
+                    validate_group(
+                        child_group,
+                        group_prefix=child_prefix,
+                    )
+
+        for root_group in groups_by_parent.get(None, []):
+            validate_group(root_group)
+
+    if errors:
+        exc = ValidationError("اطلاعات فایل‌ها کامل یا معتبر نیست.")
+        exc.validation_errors = errors
+        raise exc
+
+
+def _delete_storage_file(*, storage, file_name):
+    if file_name:
+        storage.delete(file_name)
+
+
+def _cleanup_storage_files(files):
+    for storage, file_name in files:
+        _delete_storage_file(storage=storage, file_name=file_name)
+
+
+def _track_storage_file(files, *, storage, file_name):
+    if storage and file_name:
+        files.append((storage, file_name))
+
+
+def _schedule_storage_delete(*, storage, file_name):
+    FileLifecycleService.schedule_storage_delete(
+        storage=storage,
+        file_name=file_name,
+        storage_backend="default",
+    )
+
+
+def _replace_file(*, form_data, field, row_id, upload, user, storage_files=None):
+    if not _upload_present(upload):
+        return
+
+    # Keep the global lock order: WorkflowInstance, then FormFile, then Draft/Asset.
+    WorkflowInstance.objects.select_for_update().get(pk=form_data.instance_id)
+
+    old = (
+        FormFile.objects
+        .select_for_update()
+        .filter(form_data=form_data, field=field, row_id=row_id)
+        .first()
+    )
+
+    if old:
+        old_file_name = old.file.name if old.file else ""
+        old_storage = old.file.storage if old.file else None
+
+        FileLifecycleService.detach_asset_source(old)
+
+        old.file = upload
+        old.original_name = os.path.basename(upload.name)
+        old.file_size = upload.size
+        old.content_type = getattr(upload, "content_type", "") or ""
+        old.uploaded_by = user
+
+        try:
+            old.save(update_fields=[
+                "file", "original_name", "file_size", "content_type", "uploaded_by", "updated_at"
+            ])
+        except Exception:
+            new_file_name = old.file.name if old.file else ""
+            new_storage = old.file.storage if old.file else None
+            if (
+                getattr(old.file, "_committed", False)
+                and new_storage
+                and new_file_name
+                and new_file_name != old_file_name
+            ):
+                _delete_storage_file(
+                    storage=new_storage,
+                    file_name=new_file_name,
+                )
+            raise
+
+        if storage_files is not None:
+            _track_storage_file(
+                storage_files,
+                storage=old.file.storage if old.file else None,
+                file_name=old.file.name if old.file else "",
+            )
+
+        if old_storage and old_file_name and old_file_name != old.file.name:
+            FileLifecycleService.schedule_storage_delete(
+                storage=old_storage,
+                file_name=old_file_name,
+                storage_backend="default",
+            )
+        return
+
+    form_file = FormFile(
+        form_data=form_data,
+        field=field,
+        row_id=row_id,
+        file=upload,
+        original_name=os.path.basename(upload.name),
+        file_size=upload.size,
+        content_type=getattr(upload, "content_type", "") or "",
+        uploaded_by=user,
+    )
+    try:
+        form_file.save()
+        if storage_files is not None:
+            _track_storage_file(
+                storage_files,
+                storage=form_file.file.storage if form_file.file else None,
+                file_name=form_file.file.name if form_file.file else "",
+            )
+    except Exception:
+        new_file_name = form_file.file.name if form_file.file else ""
+        new_storage = form_file.file.storage if form_file.file else None
+        if getattr(form_file.file, "_committed", False) and new_storage and new_file_name:
+            _delete_storage_file(
+                storage=new_storage,
+                file_name=new_file_name,
+            )
+        raise
+
+
+def _normalized_row_id(*, normalized_row, group, save_result, parent_reference=None, index=None):
+    if normalized_row.row_id is not None:
+        return str(normalized_row.row_id)
+
+    for group_diff in save_result.diff.groups:
+        for change in group_diff.changes:
+            if change.group.pk != group.pk:
+                continue
+            if change.action.value != "create":
+                continue
+            if change.parent_reference != parent_reference:
+                continue
+            if change.desired_row is not normalized_row:
+                continue
+            row = save_result.created_rows.get(change.row_reference)
+            if row is not None:
+                return str(row.pk)
+            return None
+
+    if index is None or parent_reference is None:
+        return None
+
+    if parent_reference.kind == RowReferenceKind.CREATE:
+        parent_row = save_result.created_rows.get(parent_reference)
+    else:
+        parent_row = RepeatableRow.objects.filter(
+            pk=parent_reference.value,
+        ).first()
+
+    if parent_row is None:
+        return None
+
+    row = (
+        RepeatableRow.objects
+        .filter(
+            instance_id=parent_row.instance_id,
+            group=group,
+            parent_row=parent_row,
+        )
+        .order_by("row_order", "pk")[index:index + 1]
+        .first()
+    )
+    return str(row.pk) if row is not None else None
+
+
+def _normalized_row_reference(*, normalized_row, group, save_result, parent_reference=None, index=None):
+    if normalized_row.row_id is not None:
+        return RowReference(
+            kind=RowReferenceKind.EXISTING,
+            value=normalized_row.row_id,
+        )
+
+    for group_diff in save_result.diff.groups:
+        for change in group_diff.changes:
+            if change.group.pk != group.pk:
+                continue
+            if change.action.value != "create":
+                continue
+            if change.parent_reference != parent_reference:
+                continue
+            if change.desired_row is not normalized_row:
+                continue
+            return change.row_reference
+
+    row_id = _normalized_row_id(
+        normalized_row=normalized_row,
+        group=group,
+        save_result=save_result,
+        parent_reference=parent_reference,
+        index=index,
+    )
+    if row_id is None:
+        return None
+
+    return RowReference(
+        kind=RowReferenceKind.EXISTING,
+        value=int(row_id),
+    )
+
+def _save_repeatable_group_files(
+    *,
+    form_data,
+
+    group,
+    normalized_rows,
+    submitted_files,
+    user,
+    save_result,
+    group_prefix=None,
+    parent_reference=None,
+    storage_files=None,
+):
+    file_fields = list(group.fields.filter(is_active=True, field_type="FILE"))
+
+    prefix = group_prefix or f"{group.code}_"
+
+    for index, normalized_row in enumerate(normalized_rows):
+        row_id = _normalized_row_id(
+            normalized_row=normalized_row,
+            group=group,
+            save_result=save_result,
+            parent_reference=parent_reference,
+            index=index,
+        )
+        row_reference = _normalized_row_reference(
+            normalized_row=normalized_row,
+            group=group,
+            save_result=save_result,
+            parent_reference=parent_reference,
+            index=index,
+        )
+        if not row_id:
+            continue
+
+        for field in file_fields:
+            _replace_file(
+                form_data=form_data,
+                field=field,
+                row_id=row_id,
+                upload=submitted_files.get(
+                    f"{prefix}{index}_{field.code}"
+                ),
+                user=user,
+                storage_files=storage_files,
+            )
+
+        for child_group_code, child_rows in normalized_row.child_groups.items():
+            child_group = group.child_groups.filter(
+                code=child_group_code,
+                is_active=True,
+            ).first()
+            if child_group is None:
+                continue
+            _save_repeatable_group_files(
+                form_data=form_data,
+                group=child_group,
+                normalized_rows=child_rows,
+                submitted_files=submitted_files,
+                user=user,
+                save_result=save_result,
+                group_prefix=f"{prefix}{index}_{child_group.code}_",
+                parent_reference=row_reference,
+                storage_files=storage_files,
+            )
+
+
+@transaction.atomic
+def save_uploaded_form_files(
+    *,
+    instance,
+    user,
+    submitted_files,
+    save_result=None,
+    storage_files=None,
+):
+    if storage_files is None:
+        storage_files = []
+    try:
+        form_data = FormData.objects.filter(instance=instance).first()
+        if form_data is None:
+            return storage_files
+
+        form = _current_form(instance)
+        if form is None:
+            return storage_files
+
+        for section in form.sections.filter(is_active=True):
+            for field in section.fields.filter(
+                is_active=True,
+                repeatable_group__isnull=True,
+                field_type="FILE",
+            ):
+                _replace_file(
+                    form_data=form_data,
+                    field=field,
+                    row_id="",
+                    upload=submitted_files.get(field.code),
+                    user=user,
+                    storage_files=storage_files,
+                )
+
+            if save_result is None:
+                continue
+
+            for group in section.repeatable_groups.filter(
+                is_active=True,
+                group_type=FormRepeatableGroup.GroupType.NORMAL,
+                parent_group__isnull=True,
+            ):
+                normalized_rows = save_result.normalized_payload.repeatable_groups.get(
+                    group.code,
+                    (),
+                )
+                _save_repeatable_group_files(
+                    form_data=form_data,
+                    group=group,
+                    normalized_rows=normalized_rows,
+                    submitted_files=submitted_files,
+                    user=user,
+                    save_result=save_result,
+                    storage_files=storage_files,
+                )
+    except Exception:
+        _cleanup_storage_files(storage_files)
+        storage_files.clear()
+        raise
+
+    transaction.on_commit(storage_files.clear)
+    return storage_files
+
+
+def _file_payload(item, *, pending_acceptance_id=None):
+    download_url = (
+        reverse(
+            "operator_panel:download_pending_acceptance_file",
+            args=[pending_acceptance_id, item.pk],
+        )
+        if pending_acceptance_id is not None
+        else reverse("operator_panel:download_form_file", args=[item.pk])
+    )
+    return {
+        "id": item.pk,
+        "name": item.original_name or Path(item.file.name).name,
+        "url": download_url,
+        "delete_url": reverse("operator_panel:delete_form_file", args=[item.pk]),
+    }
+
+
+@login_required
+def file_field_definitions(request, instance_id):
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related("workflow", "current_step"),
+        pk=instance_id,
+    )
+    read_context_step = instance.current_step
+
+    if WorkflowMembership.objects.filter(
+        workflow=instance.workflow,
+        user=request.user,
+        is_active=True,
+    ).exists():
+        read_context_step = instance.current_step
+        if read_context_step is None:
+            final_execution = (
+                instance.step_executions
+                .order_by("-performed_at")
+                .select_related("workflow_step")
+                .first()
+            )
+            read_context_step = (
+                final_execution.workflow_step
+                if final_execution is not None
+                else None
+            )
+        step_for_view = read_context_step
+    else:
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            step=instance.current_step,
+            instance=instance,
+        )
+        step_for_view = instance.current_step
+
+    pending_acceptance_id = request.GET.get("pending_acceptance_id")
+    if pending_acceptance_id:
+        try:
+            pending_acceptance_id = int(pending_acceptance_id)
+        except (TypeError, ValueError):
+            raise Http404
+
+        pending_execution = (
+            PendingAcceptanceQueueService(request.user)
+            .get_queryset()
+            .filter(
+                pk=pending_acceptance_id,
+                instance_id=instance.pk,
+            )
+            .select_related("transition", "transition__to_step")
+            .first()
+        )
+        if pending_execution is None:
+            raise Http404
+
+        read_context_step = (
+            pending_execution.transition.to_step
+            or read_context_step
+        )
+    else:
+        pending_acceptance_id = None
+
+    form = _current_form(instance)
+    if form is None or read_context_step is None:
+        return JsonResponse({"fields": [], "groups": []})
+
+    step = read_context_step
+    can_share_in_step = bool(
+        pending_acceptance_id is None
+        and instance.status == WorkflowInstance.Status.ACTIVE
+        and instance.current_step_id == step.pk
+    )
+    permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=request.user)
+
+    form_data = FormData.objects.filter(instance=instance).first()
+    existing = {}
+    if form_data:
+        existing = {
+            (item.field_id, item.row_id): _file_payload(
+                item,
+                pending_acceptance_id=pending_acceptance_id,
+            )
+            for item in FormFile.objects.filter(form_data=form_data)
+        }
+
+    fields = []
+    groups = []
+
+    for section in form.sections.filter(is_active=True):
+        for field in section.fields.filter(
+            is_active=True,
+            repeatable_group__isnull=True,
+            field_type="FILE",
+        ):
+            if not permission_context.field(field).can_view:
+                continue
+            fields.append({
+                "field_id": field.pk,
+                "code": field.code,
+                "label": field.label,
+                "scope": "FORM",
+                "editable": permission_context.field(field).can_edit,
+                "shareable": (
+                    can_share_in_step
+                    and can_share_file_field(
+                        user=request.user, field=field,
+                        workflow=instance.workflow, step=step,
+                    )
+                ),
+                "required": bool(field.is_required),
+                "input_name": field.code,
+                "file": existing.get((field.pk, "")),
+            })
+
+        groups_by_parent = {}
+        for group in section.repeatable_groups.filter(
+            is_active=True,
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+        ).order_by("parent_group_id", "order", "pk"):
+            groups_by_parent.setdefault(group.parent_group_id, []).append(group)
+
+        def append_group(group, parent_context_by_row=None):
+            parent_context_by_row = parent_context_by_row or {}
+
+            rows = list(
+                RepeatableRow.objects
+                .filter(instance=instance, group=group)
+                .order_by("parent_row_id", "row_order", "pk")
+            )
+            sibling_indexes = {}
+            row_contexts = {}
+            for row in rows:
+                parent_key = row.parent_row_id
+                row_index = sibling_indexes.get(parent_key, 0)
+                sibling_indexes[parent_key] = row_index + 1
+                parent_context = parent_context_by_row.get(
+                    str(parent_key),
+                    (),
+                )
+                row_contexts[str(row.pk)] = parent_context + (
+                    {
+                        "group_code": group.code,
+                        "row_index": row_index,
+                    },
+                )
+
+            visible_fields = [
+                field
+                for field in group.fields.filter(is_active=True)
+                if permission_context.field(field).can_view
+            ]
+            group_fields = []
+            for column_index, field in enumerate(visible_fields):
+                if field.field_type != "FILE":
+                    continue
+                group_fields.append({
+                    "field_id": field.pk,
+                    "code": field.code,
+                    "label": field.label,
+                    "editable": (
+                        permission_context.field(field).can_edit
+                        and permission_context.group(group).can_edit
+                    ),
+                    "shareable": (
+                        can_share_in_step
+                        and can_share_file_field(
+                            user=request.user, field=field,
+                            workflow=instance.workflow, step=step,
+                        )
+                    ),
+                    "required": bool(field.is_required),
+                    "column_index": column_index,
+                })
+
+            if permission_context.group(group).can_view and group_fields:
+                file_payloads = []
+                for (field_id, row_id), payload in existing.items():
+                    field = next(
+                        (
+                            item
+                            for item in group_fields
+                            if item["field_id"] == field_id
+                        ),
+                        None,
+                    )
+                    context = row_contexts.get(str(row_id))
+                    if field is None or context is None:
+                        continue
+
+                    prefix = "".join(
+                        f"{item['group_code']}_{item['row_index']}_"
+                        for item in context
+                    )
+                    file_payloads.append({
+                        "field_code": field["code"],
+                        "row_id": row_id,
+                        "row_index": context[-1]["row_index"],
+                        "input_name": f"{prefix}{field['code']}",
+                        **payload,
+                    })
+
+                groups.append({
+                    "code": group.code,
+                    "parent_group_code": (
+                        group.parent_group.code
+                        if group.parent_group_id
+                        else None
+                    ),
+                    "fields": group_fields,
+                    "files": file_payloads,
+                    "is_table": group.display_type == "TABLE",
+                })
+
+            for child_group in groups_by_parent.get(group.pk, []):
+                append_group(child_group, row_contexts)
+
+        for root_group in groups_by_parent.get(None, []):
+            append_group(root_group)
+
+    return JsonResponse({"fields": fields, "groups": groups})
+
+
+@login_required
+@transaction.atomic
+def delete_form_file(request, file_id):
+    if request.method != "POST":
+        return JsonResponse({"error": "فقط درخواست POST مجاز است."}, status=405)
+
+    form_file = (
+        FormFile.objects
+        .select_related(
+            "form_data",
+            "form_data__instance",
+            "form_data__instance__workflow",
+            "form_data__instance__current_step",
+            "field",
+            "field__section",
+            "field__repeatable_group",
+        )
+        .filter(pk=file_id)
+        .first()
+    )
+    if form_file is None:
+        raise Http404
+
+    instance = form_file.form_data.instance
+    step = instance.current_step
+
+    WorkflowAuthorizationService.require_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=step,
+        instance=instance,
+    )
+
+    form = _current_form(instance)
+    if form is None:
+        raise Http404
+    permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=step, user=request.user)
+
+    if not permission_context.field(form_file.field).can_edit:
+        return JsonResponse({"error": "شما اجازه حذف این فایل را ندارید."}, status=403)
+
+    if form_file.field.repeatable_group_id and not permission_context.group(form_file.field.repeatable_group).can_edit:
+        return JsonResponse({"error": "شما اجازه حذف این فایل را ندارید."}, status=403)
+
+    FileLifecycleService.delete_form_file(form_file)
+
+    return JsonResponse({"success": True, "file_id": file_id})
+
+
+@login_required
+def workflow_instance_with_files(request, instance_id):
+    from operator_panel import views
+
+    storage_files = []
+    try:
+        with transaction.atomic():
+            if request.method != "POST":
+                return views.workflow_instance(request, instance_id)
+
+            instance = get_object_or_404(
+                WorkflowInstance.objects.select_related("workflow", "current_step"),
+                pk=instance_id,
+            )
+            WorkflowAuthorizationService.require_permission(
+                user=request.user,
+                workflow=instance.workflow,
+                action=WorkflowPermission.Action.VIEW,
+                step=instance.current_step,
+                instance=instance,
+            )
+
+            submitted_data = prepare_submitted_data_for_files(
+                instance=instance,
+                submitted_data=request.POST,
+                submitted_files=request.FILES,
+            )
+            validate_uploaded_files(
+                instance=instance,
+                user=request.user,
+                submitted_data=submitted_data,
+                submitted_files=request.FILES,
+            )
+
+            request._post = submitted_data
+            result = views.workflow_instance(
+                request,
+                instance_id,
+                _return_save_result=True,
+            )
+            if isinstance(result, tuple):
+                response, save_result = result
+            else:
+                response, save_result = result, None
+            if 300 <= response.status_code < 400:
+                save_uploaded_form_files(
+                    instance=instance,
+                    user=request.user,
+                    submitted_files=request.FILES,
+                    save_result=save_result,
+                    storage_files=storage_files,
+                )
+            return response
+    except Exception:
+        _cleanup_storage_files(storage_files)
+        raise
+
+
+@login_required
+def open_pending_acceptance_file(request, transition_execution_id, file_id):
+    from .acceptance_queue_services import PendingAcceptanceQueueService
+
+    transition_execution = (
+        PendingAcceptanceQueueService(request.user)
+        .get_queryset()
+        .filter(pk=transition_execution_id)
+        .first()
+    )
+    if transition_execution is None:
+        raise Http404
+
+    form_file = (
+        FormFile.objects
+        .select_related(
+            "form_data",
+            "form_data__instance",
+            "form_data__instance__workflow",
+            "form_data__instance__current_step",
+            "field",
+            "field__section",
+            "field__repeatable_group",
+        )
+        .filter(
+            pk=file_id,
+            form_data__instance_id=transition_execution.instance_id,
+        )
+        .first()
+    )
+    if form_file is None:
+        raise Http404
+
+    instance = form_file.form_data.instance
+    form = _current_form(instance)
+    if form is None:
+        raise Http404
+
+    read_context_step = transition_execution.transition.to_step
+    if read_context_step is None:
+        raise Http404
+
+    permission_context = PermissionContext.build(
+        workflow=instance.workflow,
+        form=form,
+        step=read_context_step,
+        user=request.user,
+    )
+
+    if not permission_context.field(form_file.field).can_view:
+        raise Http404
+
+    if (
+        form_file.field.repeatable_group_id
+        and not permission_context.group(form_file.field.repeatable_group).can_view
+    ):
+        raise Http404
+
+    try:
+        form_file.file.open("rb")
+    except (FileNotFoundError, OSError):
+        raise Http404
+
+    filename = form_file.original_name or Path(form_file.file.name).name
+    response = FileResponse(
+        form_file.file,
+        as_attachment=True,
+        filename=filename,
+    )
+    if form_file.content_type:
+        response["Content-Type"] = form_file.content_type
+    return response
+
+@login_required
+def open_form_file(request, file_id):
+    form_file = (
+        FormFile.objects
+        .select_related(
+            "form_data",
+            "form_data__instance",
+            "form_data__instance__workflow",
+            "form_data__instance__current_step",
+            "field",
+            "field__section",
+            "field__repeatable_group",
+        )
+        .filter(pk=file_id)
+        .first()
+    )
+    if form_file is None:
+        raise Http404
+
+    instance = form_file.form_data.instance
+    WorkflowAuthorizationService.require_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=instance.current_step,
+        instance=instance,
+    )
+
+    form = _current_form(instance)
+    if form is None:
+        raise Http404
+    permission_context = PermissionContext.build(workflow=instance.workflow, form=form, step=instance.current_step, user=request.user)
+
+    if not permission_context.field(form_file.field).can_view:
+        raise Http404
+
+    if form_file.field.repeatable_group_id and not permission_context.group(form_file.field.repeatable_group).can_view:
+        raise Http404
+
+    try:
+        form_file.file.open("rb")
+    except (FileNotFoundError, OSError):
+        raise Http404
+
+    filename = form_file.original_name or Path(form_file.file.name).name
+    response = FileResponse(
+        form_file.file,
+        as_attachment=True,
+        filename=filename,
+    )
+    if form_file.content_type:
+        response["Content-Type"] = form_file.content_type
+    return response

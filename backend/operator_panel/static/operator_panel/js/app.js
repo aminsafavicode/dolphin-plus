@@ -1,0 +1,3538 @@
+document.addEventListener("DOMContentLoaded", () => {
+
+/*
+ * ---------------------------------------------------------
+ * Edit mode check
+ * ---------------------------------------------------------
+ */
+
+function isEditMode() {
+    const form = document.querySelector("form[data-instance-id]");
+    if (!form) return false;
+    return form.dataset.editMode === "1";
+}
+
+/*
+ * ---------------------------------------------------------
+ * UUID generator for stable row identity
+ * ---------------------------------------------------------
+ */
+
+function generateRowId() {
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(
+            /[xy]/g,
+            function (c) {
+                const r = (Math.random() * 16) | 0;
+                const v = c === "x" ? r : (r & 0x3) | 0x8;
+                return v.toString(16);
+            }
+        );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Sidebar
+     * ---------------------------------------------------------
+     */
+
+    const layout = document.querySelector(".df-layout");
+    const toggle = document.getElementById("df-sidebar-toggle");
+
+    if (layout && toggle) {
+        toggle.addEventListener("click", () => {
+            layout.classList.toggle("sidebar-collapsed");
+        });
+    }
+
+    /*
+     * Mobile workflow-start flyout.
+     *
+     * On small screens the sidebar is an icon rail and workflow names
+     * are hidden, so the start buttons would be indistinguishable. The
+     * trigger opens a labeled flyout that works with touch (tap to open,
+     * tap outside or Escape to close).
+     */
+
+    const workflowTrigger = document.getElementById(
+        "df-nav-workflow-trigger"
+    );
+
+    const workflowList = document.getElementById(
+        "df-nav-workflows"
+    );
+
+    if (workflowTrigger && workflowList) {
+
+        workflowTrigger.addEventListener("click", (event) => {
+            event.stopPropagation();
+
+            const isOpen =
+                workflowTrigger.getAttribute("aria-expanded") === "true";
+
+            workflowTrigger.setAttribute(
+                "aria-expanded",
+                String(!isOpen)
+            );
+        });
+
+        function escapeRegExp(value) {
+    return value.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
+}
+
+function reindexFlatTableRootRows(container, rootGroupCode) {
+    /*
+     * A populated flat-table root may have no visual root <tr>.
+     * Its first child row carries the root fields and rootIndex.
+     * Therefore root rows must be discovered by logical rootIndex,
+     * not by row group.
+     *
+     * Reindex in two phases. Do not mutate rootIndex while discovering
+     * or matching the remaining roots, otherwise a move such as 1 -> 0
+     * can collide with an existing root 0.
+     */
+    const items = Array.from(
+        container.querySelectorAll("[data-repeatable-item]")
+    );
+
+    const logicalRoots = [];
+    const seenRootIndexes = new Set();
+
+    items.forEach((row) => {
+        const oldIndex = row.dataset.rootIndex;
+        if (oldIndex === undefined || oldIndex === "") {
+            return;
+        }
+
+        if (!seenRootIndexes.has(oldIndex)) {
+            seenRootIndexes.add(oldIndex);
+            logicalRoots.push({
+                oldIndex: String(oldIndex),
+                newIndex: logicalRoots.length,
+            });
+        }
+    });
+
+    logicalRoots.forEach(({ oldIndex, newIndex }) => {
+        const oldPrefix =
+            `${rootGroupCode}_${oldIndex}`;
+        const newPrefix =
+            `${rootGroupCode}_${newIndex}`;
+
+        const rootPattern = new RegExp(
+            `^${escapeRegExp(oldPrefix)}_`
+        );
+
+        items.forEach((row) => {
+            if (String(row.dataset.rootIndex) !== oldIndex) {
+                return;
+            }
+
+            const rowPath = row.dataset.rowPath;
+            if (rowPath && rowPath.startsWith(oldPrefix)) {
+                row.dataset.rowPath =
+                    newPrefix + rowPath.slice(oldPrefix.length);
+            }
+
+            row.querySelectorAll(
+                "input, textarea, select"
+            ).forEach((field) => {
+                const name = field.getAttribute("name");
+                if (!name || !rootPattern.test(name)) {
+                    return;
+                }
+
+                field.name = name.replace(
+                    rootPattern,
+                    `${newPrefix}_`
+                );
+            });
+        });
+    });
+
+    logicalRoots.forEach(({ oldIndex, newIndex }) => {
+        items.forEach((row) => {
+            if (String(row.dataset.rootIndex) !== oldIndex) {
+                return;
+            }
+
+            row.dataset.rootIndex = String(newIndex);
+        });
+    });
+}
+
+function copyLiveFormControlState(sourceCell, targetCell) {
+    const sourceControls = Array.from(
+        sourceCell.querySelectorAll("input, textarea, select")
+    );
+    const targetControls = Array.from(
+        targetCell.querySelectorAll("input, textarea, select")
+    );
+
+    sourceControls.forEach((sourceControl, index) => {
+        const targetControl = targetControls[index];
+        if (!targetControl) return;
+
+        if (sourceControl instanceof HTMLInputElement) {
+            if (sourceControl.type === "file") {
+                return;
+            }
+
+            if (
+                sourceControl.type === "checkbox" ||
+                sourceControl.type === "radio"
+            ) {
+                targetControl.checked = sourceControl.checked;
+            }
+
+            targetControl.value = sourceControl.value;
+            return;
+        }
+
+        if (sourceControl instanceof HTMLTextAreaElement) {
+            targetControl.value = sourceControl.value;
+            return;
+        }
+
+        if (sourceControl instanceof HTMLSelectElement) {
+            Array.from(sourceControl.options).forEach((sourceOption, optionIndex) => {
+                const targetOption = targetControl.options[optionIndex];
+                if (targetOption) {
+                    targetOption.selected = sourceOption.selected;
+                }
+            });
+            targetControl.selectedIndex = sourceControl.selectedIndex;
+        }
+    });
+}
+
+function preserveFlatTableRootOnChildDelete(container, childRow, rootGroupCode) {
+    const rootRowId = childRow.dataset.parentRowId;
+    const rootIndex = childRow.dataset.rootIndex;
+
+    if (!rootRowId || rootIndex === undefined || rootIndex === "") {
+        return false;
+    }
+
+    const siblingChildren = Array.from(
+        container.querySelectorAll(
+            `[data-repeatable-item][data-parent-row-id="${CSS.escape(rootRowId)}"]`
+        )
+    ).filter((row) => row !== childRow);
+
+    const rootCells = Array.from(
+        childRow.querySelectorAll("[data-column-group]")
+    ).filter(
+        (cell) => cell.dataset.columnGroup === rootGroupCode
+    );
+
+    const rootIdInput = childRow.querySelector(
+        "input[data-repeatable-root-row-id]"
+    );
+
+    if (siblingChildren.length) {
+        const targetRow = siblingChildren[0];
+
+        const targetCells = Array.from(
+            targetRow.querySelectorAll("[data-column-group]")
+        ).filter(
+            (cell) => cell.dataset.columnGroup === rootGroupCode
+        );
+
+        rootCells.forEach((sourceCell, index) => {
+            const targetCell = targetCells[index];
+            if (!targetCell) return;
+
+            targetCell.innerHTML = "";
+            Array.from(sourceCell.childNodes).forEach((node) => {
+                targetCell.appendChild(node.cloneNode(true));
+            });
+            copyLiveFormControlState(sourceCell, targetCell);
+        });
+
+        if (rootIdInput) {
+            const targetActionCell = targetRow.querySelector(
+                ".df-table-actions"
+            );
+
+            if (targetActionCell) {
+                const existingRootIdInput = targetActionCell.querySelector(
+                    "input[data-repeatable-root-row-id]"
+                );
+
+                if (existingRootIdInput) {
+                    existingRootIdInput.remove();
+                }
+
+                targetActionCell.prepend(
+                    rootIdInput.cloneNode(true)
+                );
+
+                const rootDeleteButton = childRow.querySelector(
+                    ".df-repeatable-root-delete"
+                );
+
+                if (rootDeleteButton) {
+                    targetActionCell
+                        .querySelectorAll(".df-repeatable-root-delete")
+                        .forEach((button) => button.remove());
+
+                    targetActionCell.prepend(
+                        rootDeleteButton.cloneNode(true)
+                    );
+                }
+            }
+        }
+
+        childRow.querySelectorAll(
+            ".df-repeatable-child-add[data-parent-row-id]"
+        ).forEach((button) => {
+            if (button.dataset.parentRowId !== rootRowId) {
+                return;
+            }
+
+            const targetActionCell = targetRow.querySelector(
+                ".df-table-actions"
+            );
+
+            if (!targetActionCell) return;
+
+            targetActionCell.prepend(button.cloneNode(true));
+        });
+
+        childRow.querySelectorAll(
+            "input[data-repeatable-presence]"
+        ).forEach((marker) => {
+            const targetActionCell = targetRow.querySelector(
+                ".df-table-actions"
+            );
+
+            if (!targetActionCell) return;
+
+            const existingMarker = Array.from(
+                targetActionCell.querySelectorAll(
+                    "input[data-repeatable-presence]"
+                )
+            ).find((input) => input.name === marker.name);
+
+            if (existingMarker) {
+                existingMarker.remove();
+            }
+
+            targetActionCell.prepend(marker.cloneNode(true));
+        });
+
+        return false;
+    }
+
+    /*
+     * The deleted child is the root's only visual row.
+     * Convert that row into the root row instead of removing it.
+     */
+    /*
+     * The deleted child is the root's only visual row.
+     * Its descendants belong to the deleted child subtree and must not
+     * become children of the promoted root.
+     */
+    const removedDescendantIds = new Set([childRow.dataset.rowId]);
+    let descendantsChanged = true;
+
+    while (descendantsChanged) {
+        descendantsChanged = false;
+
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        ).forEach((candidate) => {
+            if (
+                candidate === childRow ||
+                !candidate.dataset.parentRowId ||
+                !removedDescendantIds.has(candidate.dataset.parentRowId)
+            ) {
+                return;
+            }
+
+            removedDescendantIds.add(candidate.dataset.rowId);
+            candidate.remove();
+            descendantsChanged = true;
+        });
+    }
+
+    /*
+     * Convert the remaining child row into the root row instead of removing
+     * the only visual representation of the root.
+     */
+    childRow.dataset.repeatableRowGroup = rootGroupCode;
+    childRow.dataset.parentRowId = "";
+    childRow.dataset.rowPath =
+        `${rootGroupCode}_${rootIndex}`;
+    childRow.dataset.rowId = rootRowId;
+
+    childRow.querySelectorAll(
+        "[data-column-group]"
+    ).forEach((cell) => {
+        if (cell.dataset.columnGroup !== rootGroupCode) {
+            cell.innerHTML = "";
+        }
+    });
+
+    const actionCell = childRow.querySelector(".df-table-actions");
+
+    if (actionCell) {
+        actionCell.querySelectorAll(
+            "input[data-repeatable-row-id]"
+        ).forEach((input) => input.remove());
+
+        /*
+         * Keep only the dedicated root-delete action after promotion.
+         * The old child-delete action must not acquire root semantics.
+         */
+        actionCell.querySelectorAll(
+            ".df-repeatable-delete"
+        ).forEach((button) => button.remove());
+
+        if (rootIdInput) {
+            rootIdInput.name =
+                `${rootGroupCode}_${rootIndex}__id`;
+            rootIdInput.value = rootRowId;
+            rootIdInput.dataset.repeatableRootRowId = "";
+            rootIdInput.removeAttribute("data-repeatable-row-id");
+        }
+    }
+
+    childRow.querySelectorAll(
+        "input, textarea, select"
+    ).forEach((field) => {
+        if (
+            field.closest(
+                `[data-column-group="${CSS.escape(rootGroupCode)}"]`
+            )
+        ) {
+            return;
+        }
+
+        field.remove();
+    });
+
+    childRow.querySelectorAll(
+        ".df-repeatable-child-add[data-parent-row-id]"
+    ).forEach((button) => {
+        if (button.dataset.parentRowId !== rootRowId) {
+            button.remove();
+        }
+    });
+
+    return true;
+}
+
+function reindexFlatTableChildRows(
+    container,
+    childGroupCode,
+    parentRowId,
+    parentPath
+) {
+    const childRows = Array.from(
+        container.querySelectorAll(
+            `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(childGroupCode)}"][data-parent-row-id="${CSS.escape(parentRowId)}"]`
+        )
+    );
+
+    const childPattern =
+        new RegExp(
+            `^${escapeRegExp(parentPath)}_${escapeRegExp(childGroupCode)}_\\d+_`
+        );
+
+    childRows.forEach((row, childIndex) => {
+        row.dataset.rowPath =
+            `${parentPath}_${childGroupCode}_${childIndex}`;
+
+        row.querySelectorAll("input, textarea, select").forEach((field) => {
+            const name = field.getAttribute("name");
+            if (!name) return;
+
+            if (childPattern.test(name)) {
+                field.name = name.replace(
+                    childPattern,
+                    `${parentPath}_${childGroupCode}_${childIndex}_`
+                );
+            }
+        });
+    });
+}
+
+function removeFlatTableSubtree(container, rootRowId) {
+    const removedIds = new Set([rootRowId]);
+    let changed = true;
+
+    while (changed) {
+        changed = false;
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        ).forEach((candidate) => {
+            if (
+                candidate.dataset.parentRowId &&
+                removedIds.has(candidate.dataset.parentRowId) &&
+                !removedIds.has(candidate.dataset.rowId)
+            ) {
+                removedIds.add(candidate.dataset.rowId);
+                changed = true;
+            }
+        });
+    }
+
+    Array.from(
+        container.querySelectorAll("[data-repeatable-item]")
+    )
+        .filter((candidate) => removedIds.has(candidate.dataset.rowId))
+        .forEach((candidate) => candidate.remove());
+
+    return removedIds;
+}
+
+document.addEventListener("click", (event) => {
+            if (
+                !workflowTrigger.contains(event.target) &&
+                !workflowList.contains(event.target)
+            ) {
+                workflowTrigger.setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+            }
+        });
+
+        document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape") {
+                workflowTrigger.setAttribute(
+                    "aria-expanded",
+                    "false"
+                );
+            }
+        });
+    }
+
+
+    /*
+     * ---------------------------------------------------------
+     * Notifications
+     * ---------------------------------------------------------
+     */
+
+    const notificationToggle = document.getElementById(
+        "df-notification-toggle"
+    );
+
+    const notificationMenu = document.getElementById(
+        "df-notification-menu"
+    );
+
+    const notificationList = document.getElementById(
+        "df-notification-list"
+    );
+
+    const notificationBadge = document.getElementById(
+        "df-notification-badge"
+    );
+
+    const notificationCount = document.getElementById(
+        "df-notification-menu-count"
+    );
+
+/*
+ * ---------------------------------------------------------
+ * Notification Alerts
+ * ---------------------------------------------------------
+ */
+
+let knownNotificationIds = new Set();
+
+let notificationAudioUnlocked = false;
+
+let notificationsInitialized = false;
+
+async function requestNotificationPermission() {
+
+    if (!("Notification" in window)) {
+        console.warn(
+            "Browser Notification API is not supported."
+        );
+        return false;
+    }
+
+    if (Notification.permission === "granted") {
+        return true;
+    }
+
+    if (Notification.permission === "denied") {
+        console.warn(
+            "Browser notifications are blocked."
+        );
+        return false;
+    }
+
+    const permission =
+        await Notification.requestPermission();
+
+    return permission === "granted";
+}
+
+/*
+ * Unlock browser audio after user interaction.
+ */
+
+function unlockNotificationAudio() {
+
+    notificationAudioUnlocked = true;
+}
+document.addEventListener(
+    "click",
+    unlockNotificationAudio,
+    {
+        once: true,
+    }
+);
+
+
+
+/*
+ * Play notification sound.
+ */
+
+function playNotificationSound() {
+
+    if (!notificationAudioUnlocked) {
+        return;
+    }
+
+    const audio = new Audio(
+        "/static/operator_panel/audio/notification.mp3"
+    );
+
+    audio.volume = 0.7;
+
+    audio.play().catch((error) => {
+
+        console.warn(
+            "Notification sound could not be played:",
+            error
+        );
+
+    });
+
+}
+
+
+/*
+ * Speak notification message.
+ */
+
+
+
+/*
+ * Trigger alert for a new notification.
+ */
+
+function triggerNotificationAlert(notification) {
+
+    if (!notification) {
+        return;
+    }
+
+    playNotificationSound();
+
+    console.log(
+        "=== TRIGGER NOTIFICATION ALERT ===",
+        {
+            hidden: document.hidden,
+            permission:
+                "Notification" in window
+                    ? Notification.permission
+                    : "unsupported",
+            supported:
+                "Notification" in window,
+            notification: notification,
+        }
+    );
+
+    if (
+        document.hidden &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+    ) {
+
+        console.log(
+            "=== CREATING DESKTOP NOTIFICATION ===",
+            notification
+        );
+
+        const desktopNotification = new Notification(
+            notification.title || "Dolphin Flow",
+            {
+                body:
+                    notification.message ||
+                    "You have a new notification.",
+            }
+        );
+
+        desktopNotification.onshow = () => {
+            console.log("=== DESKTOP NOTIFICATION SHOWN ===");
+        };
+
+        desktopNotification.onerror = (event) => {
+            console.error(
+                "=== DESKTOP NOTIFICATION ERROR ===",
+                event
+            );
+        };
+
+        desktopNotification.onclose = () => {
+            console.log(
+                "=== DESKTOP NOTIFICATION CLOSED ==="
+            );
+        };
+
+    }
+
+}
+
+/*
+ * ---------------------------------------------------------
+ * Notification WebSocket
+ * ---------------------------------------------------------
+ */
+
+let notificationSocket = null;
+let notificationSocketReconnectTimer = null;
+
+function connectNotificationWebSocket() {
+
+    if (
+        notificationSocket &&
+        (
+            notificationSocket.readyState === WebSocket.OPEN ||
+            notificationSocket.readyState === WebSocket.CONNECTING
+        )
+    ) {
+        return;
+    }
+
+    const protocol =
+        window.location.protocol === "https:"
+            ? "wss:"
+            : "ws:";
+
+    const socketUrl =
+        `${protocol}//${window.location.host}/ws/notifications/`;
+
+    notificationSocket = new WebSocket(
+        socketUrl
+    );
+
+    notificationSocket.addEventListener(
+        "open",
+        () => {
+
+            console.log(
+                "Notification WebSocket connected."
+            );
+
+        }
+    );
+
+    notificationSocket.addEventListener(
+        "message",
+        (event) => {
+
+            try {
+
+                const notification =
+                    JSON.parse(event.data);
+
+                console.log(
+                    "Notification received:",
+                    notification
+                );
+                
+                handleIncomingNotification(
+                    notification
+                );    
+
+            } catch (error) {
+
+                console.warn(
+                    "Invalid notification WebSocket payload:",
+                    error
+                );
+
+            }
+
+        }
+    );
+
+    notificationSocket.addEventListener(
+        "close",
+        (event) => {
+
+            console.error(
+                "!!! NOTIFICATION SOCKET CLOSED !!!",
+                {
+                    code: event.code,
+                    reason: event.reason,
+                    wasClean: event.wasClean,
+                    visibility: document.visibilityState,
+                }
+            );
+
+            console.warn(
+                "Notification WebSocket disconnected.",
+                {
+                    code: event.code,
+                    reason: event.reason,
+                    wasClean: event.wasClean,
+                }
+            );
+
+        }
+    );
+
+    notificationSocket.addEventListener(
+        "error",
+        (error) => {
+
+            console.warn(
+                "Notification WebSocket error:",
+                error
+            );
+
+        }
+    );
+}
+
+function handleIncomingNotification(notification) {
+
+    if (
+        !notification ||
+        !notification.id
+    ) {
+        return;
+    }
+
+    if (
+        knownNotificationIds.has(
+            notification.id
+        )
+    ) {
+        return;
+    }
+
+    knownNotificationIds.add(
+        notification.id
+    );
+
+    triggerNotificationAlert(
+        notification
+    );
+
+    loadNotifications();
+}
+
+connectNotificationWebSocket();
+
+/*
+ * Notification menu
+ */
+
+function closeNotificationMenu() {
+
+    notificationMenu.classList.remove("open");
+
+    notificationToggle.setAttribute(
+        "aria-expanded",
+        "false"
+    );
+
+    notificationMenu.setAttribute(
+        "aria-hidden",
+        "true"
+    );
+}
+
+
+function openNotificationMenu() {
+
+    notificationMenu.classList.add("open");
+
+    notificationToggle.setAttribute(
+        "aria-expanded",
+        "true"
+    );
+
+    notificationMenu.setAttribute(
+        "aria-hidden",
+        "false"
+    );
+}
+
+
+/*
+ * Open / close notification menu
+ */
+
+notificationToggle.addEventListener("click", async (event) => {
+
+    event.stopPropagation();
+
+    const isOpen =
+        notificationMenu.classList.contains("open");
+
+    if (isOpen) {
+
+        closeNotificationMenu();
+
+        return;
+    }
+
+    await requestNotificationPermission();
+
+    openNotificationMenu();
+
+    await loadNotifications();
+
+});
+
+/*
+ * ---------------------------------------------------------
+ * Device Table + Add/Edit Modal
+ * ---------------------------------------------------------
+ */
+(() => {
+
+    const getModal = (groupCode) => {
+        return document.querySelector(
+            `.df-device-modal[data-device-modal="${groupCode}"]`
+        );
+    };
+
+    const openModal = (modal) => {
+        if (!modal) return;
+
+        modal.hidden = false;
+        document.body.classList.add("df-modal-open");
+
+        const firstField = modal.querySelector(
+            "[data-device-modal-field]"
+        );
+
+        firstField?.focus();
+    };
+
+    const closeModal = (modal) => {
+        if (!modal) return;
+
+        modal.hidden = true;
+        document.body.classList.remove("df-modal-open");
+    };
+
+    const clearModalErrors = (modal) => {
+        modal.querySelectorAll(
+            ".df-device-modal-field"
+        ).forEach((field) => {
+            field.classList.remove("has-error");
+
+            const error = field.querySelector(
+                ".df-device-modal-error"
+            );
+
+            if (error) {
+                error.textContent = "";
+            }
+        });
+    };
+
+    const resetModal = (modal) => {
+
+        modal.querySelectorAll(
+            "[data-device-modal-field], [data-device-modal-child-field]"
+        ).forEach((field) => {
+
+            if (
+                field.tagName === "SELECT"
+                || field.tagName === "TEXTAREA"
+                || field.tagName === "INPUT"
+            ) {
+                if (field.type === "checkbox") {
+                    field.checked = false;
+                } else {
+                    field.value = "";
+                }
+                field.disabled =
+                    field.dataset.systemKey === "DEVICE_MODEL";
+            }
+
+        });
+
+        clearModalErrors(modal);
+
+        delete modal.dataset.deviceId;
+    };
+
+    const validateModal = (modal) => {
+
+        clearModalErrors(modal);
+
+        let firstError = null;
+
+        modal.querySelectorAll(
+            ".df-device-modal-field"
+        ).forEach((wrapper) => {
+
+            const field = wrapper.querySelector(
+                "[data-device-modal-field], [data-device-modal-child-field]"
+            );
+
+            if (!field) return;
+
+            const required =
+                wrapper.querySelector("label span");
+
+            if (!required) return;
+
+            const empty =
+                field.type === "checkbox"
+                    ? !field.checked
+                    : !String(field.value || "").trim();
+
+            if (empty) {
+
+                wrapper.classList.add("has-error");
+
+                const error =
+                    wrapper.querySelector(
+                        ".df-device-modal-error"
+                    );
+
+                if (error) {
+                    error.textContent =
+                        "این فیلد الزامی است.";
+                }
+
+                if (!firstError) {
+                    firstError = field;
+                }
+            }
+
+        });
+
+        if (firstError) {
+            firstError.focus();
+            return false;
+        }
+
+        return true;
+    };
+
+const submitNewDevice = (modal, groupCode) => {
+    if (!validateModal(modal)) return;
+
+    const form = document.querySelector(".workflow-instance form");
+    if (!form) return;
+
+    const group = form.querySelector(
+        `.df-device-group[data-repeatable-group="${CSS.escape(groupCode)}"]`
+    );
+    const itemsContainer = group?.querySelector(".df-repeatable-items");
+    const rootTemplate = itemsContainer?.querySelector(
+        "[data-repeatable-root-template]"
+    );
+
+    if (!group || !itemsContainer || !rootTemplate) {
+        console.error("DEVICE flat-table root template not found:", groupCode);
+        return;
+    }
+
+    /*
+     * A populated root may have no visual root <tr>; its first child row
+     * carries the rootIndex instead. Therefore root-index allocation must
+     * inspect every real row in the logical DEVICE tree, not only rows
+     * without a parentRowId. Otherwise adding a new DEVICE after an
+     * existing nested DEVICE reuses root index 0 and corrupts the POST
+     * hierarchy of the existing rows.
+     */
+    const rootIndexes = Array.from(
+        itemsContainer.querySelectorAll("[data-repeatable-item]")
+    )
+        .map((row) => Number(row.dataset.rootIndex))
+        .filter(Number.isInteger);
+
+    const newIndex = rootIndexes.length
+        ? Math.max(...rootIndexes) + 1
+        : 0;
+
+    const rootRowId = generateRowId();
+    const rootRow = rootTemplate.cloneNode(true);
+
+    rootRow.removeAttribute("data-repeatable-template");
+    rootRow.removeAttribute("data-repeatable-root-template");
+    rootRow.style.display = "";
+    rootRow.dataset.repeatableItem = "";
+    rootRow.dataset.repeatableRowGroup = groupCode;
+    rootRow.dataset.rootIndex = String(newIndex);
+    rootRow.dataset.rowPath = `${groupCode}_${newIndex}`;
+    rootRow.dataset.rowId = rootRowId;
+    rootRow.dataset.parentRowId = "";
+
+    rootRow.querySelectorAll("input, textarea, select").forEach((field) => {
+        const oldName = field.getAttribute("name") || "";
+
+        if (oldName.endsWith("__id")) {
+            field.name = `${groupCode}_${newIndex}__id`;
+            field.value = rootRowId;
+            field.dataset.repeatableRootRowId = "";
+            field.removeAttribute("data-repeatable-row-id");
+            return;
+        }
+
+        if (oldName.endsWith("_instance_device_id")) {
+            field.name = `${groupCode}_${newIndex}_instance_device_id`;
+            field.value = "";
+            return;
+        }
+
+        if (field.dataset.repeatablePresence) {
+            field.name = oldName.replace(
+                `${groupCode}_TEMPLATE_`,
+                `${groupCode}_${newIndex}_`
+            );
+            return;
+        }
+
+        const marker = `${groupCode}_TEMPLATE_`;
+        if (!oldName.startsWith(marker)) return;
+
+        const fieldCode = oldName.slice(marker.length);
+        field.name = `${groupCode}_${newIndex}_${fieldCode}`;
+
+        const modalField = modal.querySelector(
+            `[data-device-modal-field][data-field-code="${CSS.escape(fieldCode)}"]`
+        );
+        if (!modalField) {
+            if (field.type === "checkbox") field.checked = false;
+            else field.value = "";
+            return;
+        }
+
+        if (field.type === "checkbox") {
+            field.checked = modalField.checked;
+        } else {
+            field.value = modalField.value;
+        }
+    });
+
+    rootRow.querySelectorAll(
+        ".df-repeatable-child-add[data-parent-row-id]"
+    ).forEach((button) => {
+        button.dataset.parentRowId = rootRowId;
+    });
+
+    /*
+     * A DEVICE is inserted into the same flat-table DOM as NORMAL rows.
+     * Direct child groups get their initial row here because the DEVICE
+     * modal already collected those optional child values. No per-row
+     * save/edit/cancel lifecycle is created.
+     */
+    const childTemplates = Array.from(
+        itemsContainer.querySelectorAll(
+            "[data-repeatable-child-template][data-child-group-code]"
+        )
+    );
+
+    const directChildCodes = new Set(
+        Array.from(
+            modal.querySelectorAll("[data-device-child-group]")
+        ).map((element) => element.dataset.deviceChildGroup)
+    );
+
+    const childRows = [];
+
+    childTemplates.forEach((childTemplate) => {
+        const childGroupCode = childTemplate.dataset.childGroupCode;
+        if (!directChildCodes.has(childGroupCode)) return;
+
+        const childRowId = generateRowId();
+        const childRow = childTemplate.cloneNode(true);
+
+        childRow.removeAttribute("data-repeatable-template");
+        childRow.removeAttribute("data-repeatable-child-template");
+        childRow.style.display = "";
+        childRow.dataset.repeatableItem = "";
+        childRow.dataset.repeatableRowGroup = childGroupCode;
+        childRow.dataset.rootIndex = String(newIndex);
+        childRow.dataset.rowPath =
+            `${groupCode}_${newIndex}_${childGroupCode}_0`;
+        childRow.dataset.rowId = childRowId;
+        childRow.dataset.parentRowId = rootRowId;
+
+        const modalChildGroup = modal.querySelector(
+            `[data-device-child-group="${CSS.escape(childGroupCode)}"]`
+        );
+
+        childRow.querySelectorAll("input, textarea, select").forEach((field) => {
+            const oldName = field.getAttribute("name") || "";
+
+            if (oldName.endsWith("__id")) {
+                field.name =
+                    `${groupCode}_${newIndex}_${childGroupCode}_0__id`;
+                field.value = childRowId;
+                field.dataset.repeatableRowId = "";
+                field.removeAttribute("data-repeatable-root-row-id");
+                return;
+            }
+
+            if (field.dataset.repeatablePresence) {
+                field.name = oldName.replace(
+                    "PARENT_PREFIX",
+                    `${groupCode}_${newIndex}_${childGroupCode}_0_`
+                );
+                return;
+            }
+
+            if (!oldName.startsWith("PARENT_PREFIX")) return;
+
+            const marker =
+                `PARENT_PREFIX${childGroupCode}_TEMPLATE_`;
+            if (!oldName.startsWith(marker)) return;
+
+            const fieldCode = oldName.slice(marker.length);
+            field.name =
+                `${groupCode}_${newIndex}_${childGroupCode}_0_${fieldCode}`;
+
+            const modalField = modalChildGroup?.querySelector(
+                `[data-device-modal-child-field][data-field-code="${CSS.escape(fieldCode)}"]`
+            );
+
+            if (modalField) {
+                if (field.type === "checkbox") {
+                    field.checked = modalField.checked;
+                } else {
+                    field.value = modalField.value;
+                }
+            } else if (field.type === "checkbox") {
+                field.checked = false;
+            } else {
+                field.value = "";
+            }
+        });
+
+        childRow.querySelectorAll(
+            ".df-repeatable-child-add[data-parent-row-id]"
+        ).forEach((button) => {
+            button.dataset.parentRowId = childRowId;
+        });
+
+        childRows.push(childRow);
+    });
+
+    /*
+     * The template row is a detached clone, so calling .after() on rootRow
+     * cannot attach it to the live tbody. Append the materialized subtree
+     * to the actual repeatable container instead.
+     *
+     * The empty-state row is only a presentation placeholder and must be
+     * removed once the first real DEVICE row is materialized.
+     */
+    itemsContainer.querySelectorAll(".df-table-empty").forEach((row) => row.remove());
+
+    itemsContainer.append(rootRow, ...childRows);
+
+    closeModal(modal);
+};
+    /*
+     * DEVICE rows now use the same flat-table lifecycle as NORMAL rows.
+     * The modal only collects initial DEVICE-specific values; once submitted
+     * its values are materialized into the canonical flat-table row tree.
+     */
+    document.addEventListener("click", (event) => {
+        const addButton = event.target.closest(".df-device-add");
+
+        if (addButton) {
+            if (!isEditMode()) return;
+
+            const groupCode = addButton.dataset.groupCode;
+            const modal = getModal(groupCode);
+            if (!modal) return;
+
+            resetModal(modal);
+            openModal(modal);
+            return;
+        }
+
+        const closeButton = event.target.closest(
+            ".df-device-modal-close, .df-device-modal-cancel"
+        );
+
+        if (closeButton) {
+            closeModal(closeButton.closest(".df-device-modal"));
+            return;
+        }
+
+        if (
+            event.target.classList.contains(
+                "df-device-modal-backdrop"
+            )
+        ) {
+            closeModal(
+                event.target.closest(".df-device-modal")
+            );
+            return;
+        }
+
+        const modalSubmit = event.target.closest(
+            ".df-device-modal-submit"
+        );
+
+        if (!modalSubmit) return;
+
+        const groupCode = modalSubmit.dataset.groupCode;
+        const modal = getModal(groupCode);
+        if (!modal) return;
+
+        submitNewDevice(modal, groupCode);
+    });
+
+})();
+
+
+/*
+ * ---------------------------------------------------------
+ * Device Type -> Device Model dependency
+ * ---------------------------------------------------------
+ */
+
+document.addEventListener(
+    "change",
+    async (event) => {
+
+        const typeField =
+            event.target.closest(
+                '[data-device-modal-field][data-system-key="DEVICE_TYPE"], .df-device-group [data-system-key="DEVICE_TYPE"]'
+            );
+
+        if (!typeField) {
+            return;
+        }
+
+        const modal = typeField.closest(".df-device-modal");
+        const row = typeField.closest("[data-repeatable-item]");
+
+        const modelField = modal
+            ? modal.querySelector(
+                '[data-device-modal-field][data-system-key="DEVICE_MODEL"]'
+            )
+            : row?.querySelector(
+                '[data-system-key="DEVICE_MODEL"]'
+            );
+
+        if (!modelField) {
+            return;
+        }
+
+        const modelsUrl = modelField.dataset.deviceModelsUrl;
+
+        if (!modelsUrl) {
+            console.warn(
+                "Device models URL is not configured."
+            );
+            return;
+        }
+
+        const deviceTypeId = typeField.value;
+
+        if (!deviceTypeId) {
+            modelField.innerHTML =
+                '<option value="">---------</option>';
+            modelField.value = "";
+            modelField.disabled = true;
+            return;
+        }
+
+        const previousModelId = modelField.value;
+        modelField.disabled = true;
+
+        try {
+            const response =
+                await fetch(
+                    `${modelsUrl}?device_type_id=${encodeURIComponent(deviceTypeId)}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                    }
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    "Unable to load device models."
+                );
+            }
+
+            const data = await response.json();
+            const options =
+                Array.isArray(data.options)
+                    ? data.options
+                    : [];
+
+            modelField.innerHTML =
+                '<option value="">---------</option>';
+
+            options.forEach((option) => {
+                const element =
+                    document.createElement("option");
+                element.value = String(option.value);
+                element.textContent = option.label;
+                modelField.appendChild(element);
+            });
+
+            const stillValid =
+                previousModelId &&
+                options.some(
+                    (option) =>
+                        String(option.value) ===
+                        String(previousModelId)
+                );
+
+            modelField.value =
+                stillValid
+                    ? previousModelId
+                    : "";
+
+            modelField.disabled = false;
+        } catch (error) {
+            console.error(
+                "Unable to load device models:",
+                error
+            );
+            modelField.innerHTML =
+                '<option value="">---------</option>';
+            modelField.value = "";
+            modelField.disabled = true;
+        }
+    }
+);
+
+/*
+ * Device IMEI lookup
+ */
+
+document.addEventListener(
+    "change",
+    async (event) => {
+
+        const imeiField =
+            event.target.closest(
+                '[data-device-modal-field][data-system-key="IMEI"]'
+            );
+
+        if (!imeiField) {
+            return;
+        }
+
+        const modal =
+            imeiField.closest(
+                ".df-device-modal"
+            );
+
+        if (!modal) {
+            return;
+        }
+
+        const imei =
+            imeiField.value.trim();
+
+        if (!imei) {
+            return;
+        }
+
+        const lookupUrl =
+            modal.dataset.deviceLookupUrl;
+
+        if (!lookupUrl) {
+            console.warn(
+                "Device lookup URL is not configured."
+            );
+            return;
+        }
+
+        try {
+
+            const response =
+                await fetch(
+                    `${lookupUrl}?imei=${encodeURIComponent(imei)}`,
+                    {
+                        method: "GET",
+                        headers: {
+                            "X-Requested-With": "XMLHttpRequest",
+                        },
+                    }
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    "Device lookup failed."
+                );
+            }
+
+            const data =
+                await response.json();
+
+            console.log(
+                "IMEI LOOKUP RESULT:",
+                data
+            );
+
+            const typeField =
+                modal.querySelector(
+                    '[data-device-modal-field][data-system-key="DEVICE_TYPE"]'
+                );
+
+            const modelField =
+                modal.querySelector(
+                    '[data-device-modal-field][data-system-key="DEVICE_MODEL"]'
+                );
+
+            if (!typeField || !modelField) {
+                return;
+            }
+
+            if (data.exists) {
+
+                typeField.value =
+                    String(data.device_type_id);
+
+                typeField.disabled = true;
+
+                modelField.value =
+                    String(data.device_model_id);
+
+                modelField.disabled = true;
+
+                /* Store device_id so submitNewDevice
+                 * can create a History link. */
+                modal.dataset.deviceId =
+                    String(data.device_id);
+
+            } else {
+
+                typeField.value = "";
+                typeField.disabled = false;
+
+                modelField.value = "";
+                modelField.disabled = false;
+
+                delete modal.dataset.deviceId;
+            }
+
+        } catch (error) {
+
+            console.error(
+                "Unable to lookup device by IMEI:",
+                error
+            );
+        }
+    }
+);
+/*
+ * Dependent SELECT options
+ *
+ * When a parent SELECT changes, every child SELECT that depends on it
+ * (data-depends-on) is re-populated from the server with the options
+ * valid for the new parent value. A previously selected child value
+ * that is no longer valid is cleared so the submitted POST always
+ * carries a consistent parent/child pair. Nested dependencies are
+ * refreshed recursively through the bubbled change event.
+ */
+
+const refreshDependentChild = async (childSelect, parentValue) => {
+
+    const optionsUrl =
+        childSelect.dataset.optionsUrl;
+
+    const fieldId =
+        childSelect.dataset.fieldId;
+
+    const form =
+        childSelect.closest(
+            "form[data-instance-id]"
+        );
+
+    const instanceId =
+        form?.dataset.instanceId;
+
+    if (!optionsUrl || !fieldId || !instanceId) {
+        return;
+    }
+
+    try {
+
+        const params =
+            new URLSearchParams({
+                instance_id: instanceId,
+                field_id: fieldId,
+                parent_value: parentValue,
+            });
+
+        const response =
+            await fetch(
+                `${optionsUrl}?${params.toString()}`,
+                {
+                    method: "GET",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                }
+            );
+
+        if (!response.ok) {
+            throw new Error(
+                "Dependent options request failed."
+            );
+        }
+
+        const data =
+            await response.json();
+
+        const options =
+            Array.isArray(data.options)
+                ? data.options
+                : [];
+
+        const previousValue =
+            childSelect.value;
+
+        childSelect.innerHTML = "";
+
+        const blankOption =
+            document.createElement("option");
+
+        blankOption.value = "";
+        blankOption.textContent = "---------";
+
+        childSelect.appendChild(
+            blankOption
+        );
+
+        options.forEach((option) => {
+            const element =
+                document.createElement("option");
+
+            element.value = option.value;
+            element.textContent = option.label;
+
+            childSelect.appendChild(
+                element
+            );
+        });
+
+        /*
+         * Preserve the current selection only when the value is
+         * still valid for the new parent; otherwise clear it so an
+         * invalid child is never submitted.
+         */
+
+        const stillValid =
+            previousValue &&
+            Array.from(childSelect.options)
+                .some(
+                    (option) =>
+                        option.value === previousValue
+                );
+
+        childSelect.value =
+            stillValid
+                ? previousValue
+                : "";
+
+        /*
+         * Propagate to nested dependent selects (grandchildren).
+         */
+
+        childSelect.dispatchEvent(
+            new Event("change", {
+                bubbles: true,
+            })
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Unable to refresh dependent options:",
+            error
+        );
+    }
+};
+
+document.addEventListener("change", (event) => {
+
+    const changedSelect =
+        event.target.closest(
+            "select[data-field-code]"
+        );
+
+    if (!changedSelect) {
+        return;
+    }
+
+    const parentCode =
+        changedSelect.dataset.fieldCode;
+
+    if (!parentCode) {
+        return;
+    }
+
+    /*
+     * Scope:
+     *
+     * - a repeatable row ([data-repeatable-item]) when the changed
+     *   SELECT lives inside one, so only that row's child refreshes;
+     * - otherwise the whole form section, which lets a top-level
+     *   parent drive children in every repeatable row of the section.
+     */
+
+    const scope =
+        changedSelect.closest(
+            "[data-repeatable-item]"
+        ) ||
+        changedSelect.closest(
+            ".df-device-modal"
+        ) ||
+        changedSelect.closest(
+            "section.df-form-section"
+        ) ||
+        changedSelect.form;
+
+    if (!scope) {
+        return;
+    }
+
+    const children =
+        scope.querySelectorAll(
+            `select[data-depends-on="${CSS.escape(parentCode)}"]`
+        );
+
+    children.forEach((child) => {
+        refreshDependentChild(
+            child,
+            changedSelect.value
+        );
+    });
+});
+
+/*
+ * Close when clicking outside
+ */
+
+document.addEventListener("click", (event) => {
+
+    if (
+        !notificationMenu.contains(event.target) &&
+        !notificationToggle.contains(event.target)
+    ) {
+
+        closeNotificationMenu();
+
+    }
+
+});
+    /*
+     * Load notifications
+     */
+
+    async function loadNotifications() {
+
+        try {
+
+            const notificationsUrl =
+                notificationToggle.dataset.notificationsUrl;
+
+            const response = await fetch(
+                notificationsUrl,
+                {
+                    method: "GET",
+                    headers: {
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                }
+            );
+
+
+            if (!response.ok) {
+                throw new Error(
+                    "Notification request failed."
+                );
+            }
+
+
+            const data = await response.json();
+
+            renderNotifications(data);
+
+
+        } catch (error) {
+
+            console.warn(
+                "Unable to refresh notifications:",
+                error
+            );
+
+
+        }
+    }
+    /*
+    * ---------------------------------------------------------
+    * Notification Polling
+    * ---------------------------------------------------------
+    */
+
+    const NOTIFICATION_POLL_INTERVAL = 10000;
+
+    let notificationPollingTimer = null;
+    let notificationPollingInProgress = false;
+
+
+    /*
+    * Poll notifications safely.
+    */
+
+    async function pollNotifications() {
+
+        /*
+        * Prevent overlapping requests.
+        */
+
+        if (notificationPollingInProgress) {
+            scheduleNotificationPolling();
+            return;
+        }
+
+
+        /*
+        * Do not poll while the page is hidden.
+        */
+
+        if (document.hidden) {
+            scheduleNotificationPolling();
+            return;
+        }
+
+
+        notificationPollingInProgress = true;
+
+
+        try {
+
+            await loadNotifications();
+
+        } catch (error) {
+
+            /*
+            * Network errors should not break
+            * the notification UI.
+            */
+
+            console.warn(
+                "Notification polling temporarily unavailable."
+            );
+
+        } finally {
+
+            notificationPollingInProgress = false;
+
+            scheduleNotificationPolling();
+
+        }
+
+    }
+
+
+    /*
+    * Schedule the next polling request.
+    */
+
+    function scheduleNotificationPolling() {
+
+        if (notificationPollingTimer) {
+
+            clearTimeout(
+                notificationPollingTimer
+            );
+
+        }
+
+
+        notificationPollingTimer = setTimeout(
+            pollNotifications,
+            NOTIFICATION_POLL_INTERVAL
+        );
+
+    }
+
+
+    /*
+    * Immediately refresh notifications
+    * when the user returns to the tab.
+    */
+
+    document.addEventListener(
+        "visibilitychange",
+        () => {
+
+
+            if (!document.hidden) {
+
+                pollNotifications();
+
+            }
+
+        }
+    );
+
+
+    /*
+    * Initial notification load.
+    */
+
+    pollNotifications();
+
+    /*
+     * Render notifications
+     */
+
+    function renderNotifications(data) {
+
+        const notifications = data.notifications || [];
+
+        const count = data.count || 0;
+
+
+        /*
+        * Detect newly received notifications.
+        */
+
+        const newNotifications = [];
+
+        notifications.forEach((notification) => {
+
+            if (
+                !knownNotificationIds.has(
+                    notification.id
+                )
+            ) {
+
+                newNotifications.push(
+                    notification
+                );
+
+                knownNotificationIds.add(
+                    notification.id
+                );
+
+            }
+
+        });
+
+         /*
+         * First load only initializes known IDs.
+         */
+
+        if (!notificationsInitialized) {
+
+            notificationsInitialized = true;
+
+        } else {
+
+            newNotifications.forEach(
+                (notification) => {
+
+                    triggerNotificationAlert(
+                        notification
+                    );
+
+                }
+            );
+
+        }
+
+
+        /*
+         * Badge
+         */
+
+        if (count > 0) {
+
+            notificationBadge.textContent = count;
+
+            notificationBadge.hidden = false;
+
+        } else {
+
+            notificationBadge.hidden = true;
+
+        }
+
+
+        /*
+         * Header count
+         */
+
+        notificationCount.textContent =
+            `${count} اعلان`;
+
+
+        /*
+         * Empty state
+         */
+
+        if (notifications.length === 0) {
+
+            notificationList.innerHTML = `
+                <div class="df-notification-empty">
+                    اعلان جدیدی ندارید.
+                </div>
+            `;
+
+            return;
+        }
+
+
+        /*
+         * Notification items
+         */
+
+        notificationList.innerHTML = notifications
+            .map((notification) => {
+
+                return `
+                    <div
+                        class="df-notification-item"
+                        data-notification-id="${notification.id}"
+                        data-workflow-instance-url="${notification.workflow_instance_url ? escapeHtml(notification.workflow_instance_url) : ""}"
+                        role="button"
+                        tabindex="0"
+                    >
+
+                        <div class="df-notification-item-title">
+                            ${escapeHtml(notification.title)}
+                        </div>
+
+                        <div class="df-notification-item-message">
+                            ${escapeHtml(notification.message)}
+                        </div>
+
+                        <div class="df-notification-item-meta">
+                            ${formatNotificationDate(
+                                notification.created_at
+                            )}
+                        </div>
+
+                    </div>
+                `;
+
+            })
+            .join("");
+
+    }
+
+    async function markNotificationAsRead(notificationItem) {
+
+        const notificationId =
+            notificationItem.dataset.notificationId;
+
+        if (!notificationId) {
+            return;
+        }
+
+        const notificationsUrl =
+            notificationToggle.dataset.notificationsUrl;
+
+        const readUrl =
+            `${notificationsUrl}${notificationId}/read/`;
+
+        try {
+
+            const response = await fetch(
+                readUrl,
+                {
+                    method: "POST",
+                    headers: {
+                        "X-CSRFToken": getCsrfToken(),
+                        "X-Requested-With": "XMLHttpRequest",
+                    },
+                }
+            );
+
+            if (!response.ok) {
+                throw new Error(
+                    "Unable to mark notification as read."
+                );
+            }
+
+            const data = await response.json();
+
+            if (!data.success) {
+                throw new Error(
+                    "Notification was not marked as read."
+                );
+            }
+
+            /*
+            * Remove notification from current unread list.
+            */
+
+            notificationItem.remove();
+
+
+            /*
+            * Update badge and count.
+            */
+
+            const currentCount =
+                Number(
+                    notificationBadge.textContent
+                ) || 0;
+
+            const newCount =
+                Math.max(currentCount - 1, 0);
+
+
+            if (newCount > 0) {
+
+                notificationBadge.textContent =
+                    newCount;
+
+                notificationBadge.hidden = false;
+
+            } else {
+
+                notificationBadge.textContent = "0";
+                notificationBadge.hidden = true;
+
+            }
+
+
+            notificationCount.textContent =
+                `${newCount} اعلان`;
+
+
+        /*
+         * Empty state
+         */
+
+        if (
+            notificationList.children.length === 0
+        ) {
+
+            notificationList.innerHTML = `
+                <div class="df-notification-empty">
+                    اعلان جدیدی ندارید.
+                </div>
+            `;
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Mark notification as read error:",
+            error
+        );
+
+    }
+}
+
+    function getCsrfToken() {
+
+        const cookie = document.cookie
+            .split("; ")
+            .find(
+                row => row.startsWith("csrftoken=")
+            );
+
+        if (!cookie) {
+            return "";
+        }
+
+        return decodeURIComponent(
+            cookie.split("=")[1]
+        );
+    }
+
+    notificationList.addEventListener(
+        "click",
+        async (event) => {
+
+            const notificationItem =
+                event.target.closest(
+                    ".df-notification-item"
+                );
+
+            if (!notificationItem) {
+                return;
+            }
+
+            const instanceUrl =
+                notificationItem.dataset.workflowInstanceUrl;
+
+            await markNotificationAsRead(
+                notificationItem
+            );
+
+            /*
+             * Notifications tied to a workflow instance navigate to it
+             * after being marked as read. The URL is server-generated
+             * and the destination view re-enforces authorization.
+             */
+
+            if (instanceUrl) {
+                window.location.href = instanceUrl;
+            }
+        }
+    );
+
+    /*
+     * Keyboard activation for notification items
+     * (role="button", tabindex="0").
+     */
+
+    notificationList.addEventListener(
+        "keydown",
+        (event) => {
+
+            if (event.key !== "Enter" && event.key !== " ") {
+                return;
+            }
+
+            const notificationItem =
+                event.target.closest(
+                    ".df-notification-item"
+                );
+
+            if (!notificationItem) {
+                return;
+            }
+
+            event.preventDefault();
+
+            notificationItem.click();
+        }
+    );
+
+    /*
+     * Escape HTML
+     *
+     * Important:
+     * Notification content comes from the database.
+     * Never insert it into innerHTML without escaping.
+     */
+
+    function escapeHtml(value) {
+
+        const div = document.createElement("div");
+
+        div.textContent = value ?? "";
+
+        return div.innerHTML;
+
+    }
+
+
+    /*
+     * Format notification date
+     */
+
+    function formatNotificationDate(value) {
+
+        if (!value) {
+            return "";
+        }
+
+
+        const date = new Date(value);
+
+
+        if (Number.isNaN(date.getTime())) {
+            return "";
+        }
+
+
+        return date.toLocaleString(
+            "fa-IR",
+            {
+                dateStyle: "short",
+                timeStyle: "short",
+            }
+        );
+
+    }
+
+
+    /*
+ * ---------------------------------------------------------
+ * Repeatable Groups
+ * ---------------------------------------------------------
+ */
+
+/*
+ * Update the disabled state of delete buttons in a
+ * normal (non-DEVICE) repeatable group container.
+ *
+ * When only one row remains the delete button is
+ * disabled so the last row cannot be removed.
+ */
+function getDirectRepeatableItems(container) {
+    return Array.from(container.children).filter(
+        (item) =>
+            item.matches("[data-repeatable-item]") &&
+            !item.hasAttribute("data-repeatable-template")
+    );
+}
+
+function getDirectRepeatableTemplate(container) {
+    return Array.from(container.children).find(
+        (item) =>
+            item.matches("[data-repeatable-item][data-repeatable-template]")
+    ) || null;
+}
+
+function getGroupOwnedElements(item, group, selector) {
+    return Array.from(item.querySelectorAll(selector)).filter(
+        (element) =>
+            element.closest(".df-repeatable-group") === group
+    );
+}
+
+function getRowOwnedElements(item, selector) {
+    return Array.from(item.querySelectorAll(selector)).filter(
+        (element) =>
+            element.closest("[data-repeatable-item]") === item
+    );
+}
+
+function clearClonedNestedRows(item) {
+    item.querySelectorAll(".df-repeatable-items").forEach(
+        (container) => {
+            Array.from(container.children)
+                .filter(
+                    (child) =>
+                        child.matches("[data-repeatable-item]") &&
+                        !child.hasAttribute("data-repeatable-template")
+                )
+                .forEach((child) => child.remove());
+        }
+    );
+}
+
+function getRepeatableGroupContext(group) {
+    const context = [];
+    let currentGroup = group;
+
+    while (currentGroup) {
+        /*
+         * The current group is rendered inside its logical parent row.
+         * For NORMAL -> NORMAL nesting that parent is a repeatable item.
+         * A DEVICE row is intentionally not a generic repeatable item, so
+         * it has a dedicated fallback below.
+         */
+        const parentItem =
+            currentGroup.closest("[data-repeatable-item]");
+
+        if (parentItem) {
+            /*
+             * Exclude the current group itself when walking upward.
+             * Otherwise a nested group would resolve its own group again
+             * and never reach its grandparent.
+             */
+            const parentGroup =
+                currentGroup.parentElement?.closest(
+                    ".df-repeatable-group"
+                );
+
+            if (!parentGroup) break;
+
+            const parentItems =
+                parentGroup.querySelector(".df-repeatable-items");
+
+            if (!parentItems) break;
+
+            const parentRows = Array.from(parentItems.children).filter(
+                (item) =>
+                    item.matches("[data-repeatable-item]") &&
+                    !item.hasAttribute("data-repeatable-template")
+            );
+
+            const parentIndex = parentRows.indexOf(parentItem);
+            if (parentIndex === -1) break;
+
+            context.unshift({
+                groupCode: parentGroup.dataset.repeatableGroup,
+                index: parentIndex,
+            });
+
+            currentGroup = parentGroup;
+            continue;
+        }
+
+        /*
+         * DEVICE rows use data-device-row rather than
+         * data-repeatable-item. Nested NORMAL groups under a DEVICE must
+         * therefore contribute the DEVICE path to their POST names.
+         */
+        const deviceRow =
+            currentGroup.closest("[data-device-row]");
+
+        const deviceChildContainer =
+            currentGroup.closest(".df-repeatable-child-row");
+
+        const deviceGroup =
+            deviceRow?.closest(".df-device-group") ||
+            (
+                deviceChildContainer
+                    ? document.querySelector(
+                        ".df-device-group[data-repeatable-group=\"" +
+                        CSS.escape(
+                            deviceChildContainer.dataset.deviceGroupCode || ""
+                        ) +
+                        "\"]"
+                    )
+                    : null
+            );
+
+        const deviceIndex = Number(
+            deviceRow?.dataset.deviceIndex ??
+            deviceChildContainer?.dataset.deviceParentIndex
+        );
+
+        if (
+            !deviceGroup ||
+            !Number.isInteger(deviceIndex)
+        ) {
+            break;
+        }
+
+        context.unshift({
+            groupCode: deviceGroup.dataset.repeatableGroup,
+            index: deviceIndex,
+        });
+
+        break;
+    }
+
+    return context;
+}
+
+function getRepeatableGroupPrefix(group) {
+    return buildRepeatableGroupPrefix(
+        getRepeatableGroupContext(group),
+        group.dataset.repeatableGroup
+    );
+}
+
+/*
+ * Flat TABLE child rows are rendered as the visual row that owns
+ * the child fields. When a child group is nested directly under a
+ * root group, that visual row is NOT the root row, so its rowPath
+ * cannot be used as the parent path for a newly-added child.
+ *
+ * Resolve the logical parent path from the root index in that case.
+ * Deeper nested children keep their own rowPath because they are
+ * real parent rows for their descendants.
+ */
+function getFlatTableChildParentPath(table, parentRow, parentRowId) {
+    const rootGroupCode = table?.dataset?.repeatableGroup;
+    const rootIndex = parentRow?.dataset?.rootIndex;
+
+    if (!rootGroupCode || rootIndex === undefined || rootIndex === "") {
+        return parentRow?.dataset?.rowPath || "";
+    }
+
+    const logicalParentRow = parentRowId
+        ? Array.from(
+            table.querySelectorAll("[data-repeatable-item]")
+        ).find((row) => row.dataset.rowId === parentRowId)
+        : null;
+
+    if (logicalParentRow?.dataset?.rowPath) {
+        return logicalParentRow.dataset.rowPath;
+    }
+
+    return `${rootGroupCode}_${rootIndex}`;
+}
+
+/*
+ * Re-index flat TABLE roots after a root is removed.
+ *
+ * Row identity (data-row-id) is stable. Only the positional path and
+ * serialized field names change. Every descendant row belonging to the
+ * root must receive the same root-index replacement.
+ */
+function reindexFlatTableRootRows(container, rootGroupCode) {
+    const rootRows = Array.from(
+        container.querySelectorAll("[data-repeatable-item]")
+    )
+        .filter(
+            (row) =>
+                !row.hasAttribute("data-repeatable-template") &&
+                row.dataset.repeatableRowGroup === rootGroupCode &&
+                !row.dataset.parentRowId
+        );
+
+    rootRows.forEach((rootRow, newIndex) => {
+        const oldRootIndex = rootRow.dataset.rootIndex;
+        const oldRootPrefix = `${rootGroupCode}_${oldRootIndex}`;
+        const newRootPrefix = `${rootGroupCode}_${newIndex}`;
+
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        )
+            .filter(
+                (row) =>
+                    !row.hasAttribute("data-repeatable-template") &&
+                    row.dataset.rootIndex === oldRootIndex
+            )
+            .forEach((row) => {
+                row.dataset.rootIndex = String(newIndex);
+
+                if (row.dataset.rowPath) {
+                    row.dataset.rowPath = row.dataset.rowPath.startsWith(
+                        oldRootPrefix
+                    )
+                        ? newRootPrefix +
+                          row.dataset.rowPath.slice(oldRootPrefix.length)
+                        : row.dataset.rowPath;
+                }
+
+                row.querySelectorAll(
+                    "input, textarea, select"
+                ).forEach((field) => {
+                    const name = field.getAttribute("name");
+
+                    if (name && name.startsWith(oldRootPrefix)) {
+                        field.name =
+                            newRootPrefix +
+                            name.slice(oldRootPrefix.length);
+                    }
+                });
+            });
+    });
+}
+
+/*
+ * Re-index siblings of a flat TABLE child row after one child is removed.
+ *
+ * The parent row ID is stable. Only the child's positional segment and
+ * every descendant path/name under that child are changed.
+ */
+function reindexFlatTableChildRows(
+    container,
+    rowGroupCode,
+    parentRowId,
+    parentPath
+) {
+    const siblingRows = Array.from(
+        container.querySelectorAll("[data-repeatable-item]")
+    ).filter(
+        (row) =>
+            !row.hasAttribute("data-repeatable-template") &&
+            row.dataset.repeatableRowGroup === rowGroupCode &&
+            row.dataset.parentRowId === parentRowId
+    );
+
+    siblingRows.forEach((row, newIndex) => {
+        const oldPath = row.dataset.rowPath;
+        if (!oldPath) return;
+
+        const pathParts = oldPath.split("_");
+        const oldIndex = pathParts[pathParts.length - 1];
+        const newPath =
+            `${parentPath}_${rowGroupCode}_${newIndex}`;
+
+        if (oldPath === newPath) return;
+
+        Array.from(
+            container.querySelectorAll("[data-repeatable-item]")
+        )
+            .filter(
+                (candidate) =>
+                    !candidate.hasAttribute("data-repeatable-template") &&
+                    candidate.dataset.rowPath &&
+                    (
+                        candidate.dataset.rowPath === oldPath ||
+                        candidate.dataset.rowPath.startsWith(`${oldPath}_`)
+                    )
+            )
+            .forEach((candidate) => {
+                candidate.dataset.rowPath =
+                    newPath +
+                    candidate.dataset.rowPath.slice(oldPath.length);
+
+                candidate.querySelectorAll(
+                    "input, textarea, select"
+                ).forEach((field) => {
+                    const name = field.getAttribute("name");
+
+                    if (name && name.startsWith(oldPath)) {
+                        field.name =
+                            newPath +
+                            name.slice(oldPath.length);
+                    }
+                });
+            });
+
+        /* Keep the variable explicit: the old index is part of the path
+         * contract even though the replacement above is prefix-based. */
+        void oldIndex;
+    });
+}
+
+function updateRepeatableDeleteState(container) {
+    const group = container.closest(".df-repeatable-group");
+    if (!group) return;
+
+    /* DEVICE groups must remain completely unaffected. */
+    if (group.classList.contains("df-device-group")) return;
+
+    /* Flat TABLE rows have parent-scoped delete semantics. */
+    if (group.classList.contains("df-table-group")) return;
+
+    const rows = getDirectRepeatableItems(container);
+
+    const buttons = getDirectRepeatableItems(container).flatMap(
+        (row) =>
+            getGroupOwnedElements(
+                row,
+                group,
+                ".df-repeatable-delete"
+            )
+    );
+
+    const disable = rows.length <= 1;
+
+    buttons.forEach((btn) => {
+        btn.disabled = disable;
+    });
+}
+
+document.addEventListener("click", (event) => {
+
+    /* ---------------------------------------------------------
+     * Flat TABLE child add
+     * --------------------------------------------------------- */
+
+    const childAddButton = event.target.closest(
+        ".df-repeatable-child-add"
+    );
+
+    if (childAddButton) {
+        if (!isEditMode()) return;
+
+        const table = childAddButton.closest(".df-table-group");
+        const parentRow = childAddButton.closest("[data-repeatable-item]");
+
+        if (!table || !parentRow) return;
+
+        const container = table.querySelector(".df-repeatable-items");
+        const childGroupCode = childAddButton.dataset.groupCode;
+        const parentRowId = childAddButton.dataset.parentRowId;
+        const rootIndex = parentRow.dataset.rootIndex;
+
+        const template = container?.querySelector(
+            `[data-repeatable-child-template][data-child-group-code="${CSS.escape(childGroupCode)}"]`
+        );
+
+        if (!container || !template || !rootIndex || !parentRowId) {
+            console.error("Flat TABLE child template/context is missing.");
+            return;
+        }
+
+        const childRows = Array.from(
+            container.querySelectorAll(
+                `[data-repeatable-item][data-repeatable-row-group="${CSS.escape(childGroupCode)}"][data-parent-row-id="${CSS.escape(parentRowId)}"]`
+            )
+        );
+
+        const childIndex = childRows.length;
+        const newRowId = generateRowId();
+        const newItem = template.cloneNode(true);
+
+        newItem.removeAttribute("data-repeatable-template");
+        newItem.removeAttribute("data-repeatable-child-template");
+        newItem.setAttribute("data-repeatable-item", "");
+        newItem.classList.remove("df-repeatable-flat-template");
+        newItem.classList.add("df-repeatable-flat-row");
+        newItem.style.display = "";
+        newItem.dataset.rowId = newRowId;
+        newItem.dataset.repeatableRowGroup = childGroupCode;
+        newItem.dataset.parentRowId = parentRowId;
+        newItem.dataset.rootIndex = rootIndex;
+        const parentPath =
+            getFlatTableChildParentPath(table, parentRow, parentRowId);
+
+        if (!parentPath) {
+            console.error("Flat TABLE parent row path is missing.");
+            return;
+        }
+
+        newItem.dataset.rowPath =
+            `${parentPath}_${childGroupCode}_${childIndex}`;
+
+        newItem.querySelectorAll(
+            ".df-repeatable-child-add"
+        ).forEach((button) => {
+            button.dataset.parentRowId = newRowId;
+        });
+
+        const childPrefix =
+            `${parentPath}_${childGroupCode}_${childIndex}_`;
+
+        newItem.querySelectorAll("input, textarea, select").forEach((field) => {
+            const oldName = field.getAttribute("name");
+
+            if (!oldName) return;
+
+            const isChildField =
+                oldName.startsWith("PARENT_PREFIX") &&
+                oldName.includes(
+                    `${childGroupCode}_TEMPLATE_`
+                );
+            const isPresenceMarker =
+                oldName.startsWith("PARENT_PREFIX") &&
+                oldName.endsWith("__present");
+            const isChildRowId =
+                isChildField &&
+                field.type === "hidden" &&
+                oldName.endsWith("__id");
+
+            /*
+             * A flat TABLE child row is a visual row, not necessarily a
+             * logical-only row. Keep the clone operation scoped to fields
+             * belonging to the child template so ancestor/root inputs can
+             * never be cleared or renamed accidentally.
+             */
+            if (!isChildField && !isPresenceMarker && !isChildRowId) return;
+
+            if (isPresenceMarker) {
+                field.name = oldName.replace(
+                    "PARENT_PREFIX",
+                    `${parentPath}_${childGroupCode}_${childIndex}_`
+                );
+                return;
+            }
+
+            if (isChildRowId) {
+                field.name = `${parentPath}_${childGroupCode}_${childIndex}__id`;
+                field.value = newRowId;
+                field.dataset.repeatableRowId = "";
+                field.removeAttribute("data-repeatable-root-row-id");
+                return;
+            }
+
+            field.name = oldName
+                .replace(
+                    "PARENT_PREFIX",
+                    `${parentPath}_`
+                )
+                .replace(
+                    `_${childGroupCode}_TEMPLATE_`,
+                    `_${childGroupCode}_${childIndex}_`
+                );
+
+            if (field.type === "checkbox" || field.type === "radio") {
+                field.checked = false;
+            } else if (field.tagName === "SELECT") {
+                field.selectedIndex = 0;
+            } else {
+                field.value = "";
+            }
+        });
+
+        const existingChildren = childRows;
+        if (existingChildren.length) {
+            existingChildren[existingChildren.length - 1].after(newItem);
+        } else {
+            parentRow.after(newItem);
+        }
+
+        return;
+    }
+
+    /* ---------------------------------------------------------
+     * Delete a flat-table logical root tree
+     * --------------------------------------------------------- */
+
+    const repeatableRootDeleteBtn = event.target.closest(
+        ".df-repeatable-root-delete"
+    );
+
+    if (repeatableRootDeleteBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const flatRow = repeatableRootDeleteBtn.closest(
+            ".df-repeatable-flat-row, [data-repeatable-item]"
+        );
+        const flatTable = flatRow?.closest(".df-table-group");
+
+        if (!flatTable || !flatRow || !isEditMode()) return;
+
+        const container = flatTable.querySelector(".df-repeatable-items");
+        const rootGroupCode = flatTable.dataset.repeatableGroup;
+        const rootRowId = repeatableRootDeleteBtn.dataset.repeatableRootRowId;
+        const label =
+            repeatableRootDeleteBtn.dataset.deleteLabel || "ردیف";
+
+        if (!container || !rootRowId) return;
+
+        if (!window.confirm(`آیا از حذف این ${label} و زیرردیف‌های آن مطمئن هستید؟`)) {
+            return;
+        }
+
+        removeFlatTableSubtree(container, rootRowId);
+
+        reindexFlatTableRootRows(container, rootGroupCode);
+        return;
+    }
+
+    /* ---------------------------------------------------------
+     * Delete a normal repeatable row
+     * --------------------------------------------------------- */
+
+    const repeatableDeleteBtn = event.target.closest(
+        ".df-repeatable-delete"
+    );
+
+    if (repeatableDeleteBtn) {
+        /*
+         * TABLE delete actions are fully client-side. Prevent the click
+         * from being interpreted by any surrounding form/row interaction
+         * before resolving the flat-row context.
+         */
+        event.preventDefault();
+        event.stopPropagation();
+
+        const flatRow = repeatableDeleteBtn.closest(
+            ".df-repeatable-flat-row, [data-repeatable-item]"
+        );
+        const flatTable = flatRow?.closest(".df-table-group");
+
+        if (flatTable && flatRow) {
+            if (!isEditMode()) return;
+
+            const container = flatTable.querySelector(".df-repeatable-items");
+            const rootGroupCode = flatTable.dataset.repeatableGroup;
+            const rowGroupCode = flatRow.dataset.repeatableRowGroup;
+            const label =
+                repeatableDeleteBtn.dataset.deleteLabel || "ردیف";
+
+            if (!container) return;
+
+            if (!window.confirm(`آیا از حذف این ${label} مطمئن هستید؟`)) {
+                return;
+            }
+
+            if (rowGroupCode === rootGroupCode) {
+                const removedIds = new Set([flatRow.dataset.rowId]);
+                let changed = true;
+
+                while (changed) {
+                    changed = false;
+                    Array.from(
+                        container.querySelectorAll("[data-repeatable-item]")
+                    ).forEach((candidate) => {
+                        if (
+                            candidate.dataset.parentRowId &&
+                            removedIds.has(candidate.dataset.parentRowId) &&
+                            !removedIds.has(candidate.dataset.rowId)
+                        ) {
+                            removedIds.add(candidate.dataset.rowId);
+                            changed = true;
+                        }
+                    });
+                }
+
+                Array.from(
+                    container.querySelectorAll("[data-repeatable-item]")
+                )
+                    .filter((candidate) =>
+                        removedIds.has(candidate.dataset.rowId)
+                    )
+                    .forEach((candidate) => candidate.remove());
+
+                reindexFlatTableRootRows(
+                    container,
+                    rootGroupCode
+                );
+            } else {
+                /*
+                 * A flat-table root with children may have no visual root
+                 * row. The first child row carries the root fields and root
+                 * identity. Preserve that root representation before removing
+                 * the child, otherwise the root ID disappears from POST.
+                 */
+                const rootWasMaterialized =
+                    preserveFlatTableRootOnChildDelete(
+                        container,
+                        flatRow,
+                        rootGroupCode
+                    );
+
+                if (rootWasMaterialized) {
+                    reindexFlatTableRootRows(
+                        container,
+                        rootGroupCode
+                    );
+                    return;
+                }
+
+                const parentRowId = flatRow.dataset.parentRowId;
+                const parentRow = container.querySelector(
+                    `[data-repeatable-item][data-row-id="${CSS.escape(parentRowId)}"]`
+                );
+                const parentPath =
+                    parentRow?.dataset.rowPath ||
+                    `${rootGroupCode}_${flatRow.dataset.rootIndex}`;
+
+                removeFlatTableSubtree(
+                    container,
+                    flatRow.dataset.rowId
+                );
+
+                reindexFlatTableChildRows(
+                    container,
+                    rowGroupCode,
+                    parentRowId,
+                    parentPath
+                );
+            }
+
+            return;
+        }
+
+        /* Do not allow deleting the last row. */
+        if (repeatableDeleteBtn.disabled) return;
+
+        /* Do not allow deleting in read-only mode. */
+        if (!isEditMode()) return;
+
+        const row = repeatableDeleteBtn.closest(
+            "[data-repeatable-item]"
+        );
+
+        if (!row) return;
+
+        const container = row.closest(
+            ".df-repeatable-items"
+        );
+
+        if (!container) return;
+
+        if (
+            window.confirm(
+                `آیا از حذف این ${repeatableDeleteBtn.dataset.deleteLabel || "ردیف"} مطمئن هستید؟`
+            )
+        ) {
+            row.remove();
+
+            /* Re-index remaining rows so the next
+             * "افزودن" click gets the correct index. */
+
+            const remaining =
+                getDirectRepeatableItems(container);
+
+            const group =
+                container.closest(".df-repeatable-group");
+
+            if (!group) {
+                return;
+            }
+
+            const groupPrefix =
+                getRepeatableGroupPrefix(group);
+
+            remaining.forEach((r, i) => {
+                /*
+                 * Preserve data-row-id across reindex.
+                 * The identity is stable; only the DOM index changes.
+                 */
+
+                getGroupOwnedElements(
+                    r,
+                    group,
+                    "input, textarea, select"
+                ).forEach((f) => {
+                    const old =
+                        f.getAttribute("name");
+
+                    if (old) {
+                        f.name = reindexRepeatableFieldName(
+                            old,
+                            groupPrefix,
+                            i
+                        );
+                    }
+                });
+            });
+
+            /* Immediately recalculate delete-button state. */
+            updateRepeatableDeleteState(container);
+        }
+
+        return;
+    }        const addButton = event.target.closest(
+            ".df-repeatable-add"
+        );
+
+        if (!addButton) {
+            return;
+        }
+
+        /* Do not allow adding in read-only mode. */
+        if (!isEditMode()) return;
+
+        const groupCode =
+            addButton.dataset.groupCode;
+
+        if (!groupCode) {
+            console.error(
+                "Repeatable group code not found."
+            );
+
+            return;
+        }
+
+    const group =
+        addButton.closest(".df-repeatable-group");
+
+    if (!group) {
+        console.error(
+            "Repeatable group not found:",
+            groupCode
+        );
+
+        return;
+    }
+
+    const itemsContainer =
+        group.querySelector(
+            ".df-repeatable-items"
+        );
+
+    const groupPrefix =
+        getRepeatableGroupPrefix(group);
+
+    if (!itemsContainer) {
+        console.error(
+            "Repeatable items container not found:",
+            groupCode
+        );
+
+        return;
+    }
+
+    const items =
+        getDirectRepeatableItems(itemsContainer);
+
+    const flatTable =
+        group.classList.contains("df-table-group");
+
+    const rootItems = flatTable
+        ? items.filter(
+            (item) =>
+                item.dataset.repeatableRowGroup === groupCode
+        )
+        : items;
+
+    /*
+     * ---------------------------------------------------------
+     * Find source item
+     * ---------------------------------------------------------
+     *
+     * For an existing group, clone the last real item.
+     *
+     * For an empty group, use the server-rendered template.
+     */
+
+    let sourceItem;
+
+    if (flatTable) {
+        sourceItem =
+            itemsContainer.querySelector(
+                "[data-repeatable-root-template]"
+            );
+
+        if (!sourceItem) {
+            console.error(
+                "No flat TABLE root template available:",
+                groupCode
+            );
+            return;
+        }
+    } else if (items.length > 0) {
+
+        sourceItem =
+            items[items.length - 1];
+
+    } else {
+
+        sourceItem =
+            getDirectRepeatableTemplate(itemsContainer);
+
+        if (!sourceItem) {
+            console.error(
+                "No repeatable item or template available:",
+                groupCode
+            );
+
+            return;
+        }
+    }
+
+    /*
+     * Clone the source.
+     */
+
+    const newItem =
+        sourceItem.cloneNode(true);
+
+    /*
+     * This is now a real item, not a template.
+     */
+
+    newItem.removeAttribute(
+        "data-repeatable-template"
+    );
+    newItem.style.display = "";
+
+    /*
+     * A cloned parent/child row must not carry its existing
+     * nested row tree into the new row. Nested groups remain
+     * available, but their real rows start empty.
+     */
+    clearClonedNestedRows(newItem);
+
+    /*
+     * ---------------------------------------------------------
+     * Calculate new index
+     * ---------------------------------------------------------
+     */
+
+    let newIndex;
+
+    if (flatTable) {
+        /*
+         * In a flat TABLE a root that has children may have no visual
+         * root <tr>; its identity is carried by the child row through
+         * data-root-index. Therefore rootItems.length is not a reliable
+         * root count after a saved form is reloaded.
+         */
+        const rootIndexes = items
+            .map((item) => item.dataset.rootIndex)
+            .filter(
+                (value) =>
+                    value !== undefined &&
+                    value !== ""
+            )
+            .map(Number)
+            .filter(Number.isInteger);
+
+        newIndex = rootIndexes.length
+            ? Math.max(...rootIndexes) + 1
+            : 0;
+    } else {
+        newIndex = rootItems.length;
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Stable row identity
+     * ---------------------------------------------------------
+     *
+     * A cloned item is ALWAYS a new row.
+     * Generate a fresh UUID and set it on the row.
+     */
+
+    const newRowId = generateRowId();
+
+    newItem.dataset.rowId = newRowId;
+
+    if (flatTable) {
+        newItem.dataset.repeatableRowGroup = groupCode;
+        newItem.dataset.rootIndex = newIndex;
+        newItem.dataset.rowPath = `${groupCode}_${newIndex}`;
+        newItem.dataset.parentRowId = "";
+
+        newItem.querySelectorAll(
+            ".df-repeatable-child-add"
+        ).forEach((button) => {
+            button.dataset.parentRowId = newRowId;
+        });
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Update fields
+     * ---------------------------------------------------------
+     */
+
+    const fields =
+        getRowOwnedElements(
+            newItem,
+            "input, textarea, select"
+        );
+
+    fields.forEach((field) => {
+
+        const oldName =
+            field.getAttribute("name");
+
+        /*
+         * Replace only the numeric repeatable index.
+         *
+         * Example:
+         *
+         * devices_0_imei
+         * devices_1_imei
+         */
+
+        if (oldName) {
+            field.name = reindexRepeatableFieldName(
+                oldName,
+                groupPrefix,
+                newIndex,
+                groupCode
+            );
+        }
+
+        /*
+         * -----------------------------------------------------
+         * IDs
+         * -----------------------------------------------------
+         */
+
+        const oldId =
+            field.getAttribute("id");
+
+        if (oldId) {
+
+            const newId =
+                oldId.replace(
+                    /-\d+-/,
+                    `-${newIndex}-`
+                );
+
+            field.id = newId;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * IMPORTANT:
+         * A cloned item is ALWAYS a new item.
+         *
+         * Therefore instance_device_id MUST be empty.
+         * -----------------------------------------------------
+         */
+
+        if (
+            field.type === "hidden" &&
+            oldName &&
+            oldName.endsWith("_instance_device_id")
+        ) {
+
+            field.value = "";
+
+            return;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * Stable row identity
+         * -----------------------------------------------------
+         *
+         * A cloned _id hidden input must be replaced with
+         * the newly generated row UUID.
+         */
+
+        if (
+            field.type === "hidden" &&
+            oldName &&
+            oldName.endsWith("__id")
+        ) {
+
+            field.name =
+                `${groupPrefix}${newIndex}__id`;
+
+            field.value = newRowId;
+            field.dataset.repeatableRowId = "";
+            field.removeAttribute("data-repeatable-root-row-id");
+
+            return;
+        }
+
+        /*
+         * -----------------------------------------------------
+         * Clear normal values
+         * -----------------------------------------------------
+         */
+
+        if (
+            field.type === "checkbox" ||
+            field.type === "radio"
+        ) {
+
+            field.checked = false;
+
+        } else if (
+            field.tagName === "SELECT"
+        ) {
+
+            field.selectedIndex = 0;
+
+            /*
+             * A dependent child SELECT in a fresh row starts with no
+             * options: its parent was reset above, so the option set
+             * cloned from the source row no longer applies.
+             */
+
+            if (
+                field.hasAttribute(
+                    "data-depends-on"
+                )
+            ) {
+
+                const blankOption =
+                    document.createElement(
+                        "option"
+                    );
+
+                blankOption.value = "";
+                blankOption.textContent =
+                    "---------";
+
+                field.innerHTML = "";
+
+                field.appendChild(
+                    blankOption
+                );
+            }
+
+        } else {
+
+            field.value = "";
+        }
+    });
+
+    /*
+     * Nested groups live inside the cloned row but are not owned by the
+     * root row according to getRowOwnedElements(). Rebase all descendant
+     * names (including __present markers and grandchild templates) to the
+     * new parent index before the clone is inserted.
+     */
+    newItem.querySelectorAll(
+        ".df-repeatable-group input, .df-repeatable-group textarea, .df-repeatable-group select"
+    ).forEach((field) => {
+        const oldName = field.getAttribute("name");
+        if (!oldName) return;
+
+        field.name = reindexRepeatableFieldName(
+            oldName,
+            groupPrefix,
+            newIndex,
+            groupCode
+        );
+    });
+
+    /*
+     * ---------------------------------------------------------
+     * Update label references
+     * ---------------------------------------------------------
+     */
+
+    const labels =
+        getRowOwnedElements(
+            newItem,
+            "label[for]"
+        );
+
+    labels.forEach((label) => {
+
+        const oldFor =
+            label.getAttribute("for");
+
+        if (!oldFor) {
+            return;
+        }
+
+        const newFor =
+            oldFor.replace(
+                /-\d+-/,
+                `-${newIndex}-`
+            );
+
+        label.setAttribute(
+            "for",
+            newFor
+        );
+    });
+
+    /*
+     * ---------------------------------------------------------
+     * Remove empty-state message
+     * ---------------------------------------------------------
+     */
+
+    const emptyState =
+        Array.from(itemsContainer.children).find(
+            (child) =>
+                child.matches(".df-empty-state, .df-table-empty")
+        );
+
+    if (emptyState) {
+        emptyState.remove();
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * Append the new item
+     * ---------------------------------------------------------
+     */
+
+    itemsContainer.appendChild(
+        newItem
+    );
+
+    /* Immediately recalculate delete-button state. */
+    updateRepeatableDeleteState(itemsContainer);
+
+    console.log(
+        "Repeatable item added:",
+        {
+            groupCode,
+            index: newIndex,
+        }
+    );
+});
+
+/*
+ * Set initial delete-button state for every normal
+ * (non-DEVICE) repeatable group already on the page.
+ */
+document.querySelectorAll(".df-repeatable-items").forEach((c) => {
+    updateRepeatableDeleteState(c);
+});
+/*-------------------------------------- */
+
+const validateMainWorkflowForm = (form) => {
+
+    const errorScript =
+        document.getElementById("validation-errors");
+
+    if (!errorScript) {
+        return true;
+    }
+
+    let errors = [];
+
+    try {
+        errors = JSON.parse(
+            errorScript.textContent || "[]"
+        );
+    } catch (error) {
+        console.error(
+            "Unable to parse validation errors:",
+            error
+        );
+
+        return true;
+    }
+
+    if (!Array.isArray(errors) || !errors.length) {
+        return true;
+    }
+
+    let firstError = null;
+
+    errors.forEach((errorData) => {
+
+        if (
+            !errorData ||
+            errorData.type !== "field"
+        ) {
+            return;
+        }
+
+        const fieldCode =
+            errorData.code;
+
+        const wrapper =
+            form.querySelector(
+                `[data-field-code="${CSS.escape(fieldCode)}"]`
+            );
+
+        if (!wrapper) {
+            return;
+        }
+
+        const field =
+            wrapper.querySelector(
+                `#field-${CSS.escape(fieldCode)}`
+            );
+
+        if (!field) {
+            return;
+        }
+
+        wrapper.classList.add("has-error");
+
+        const errorElement =
+            wrapper.querySelector(
+                `[data-field-error="${CSS.escape(fieldCode)}"]`
+            );
+
+        if (errorElement) {
+            errorElement.textContent =
+                errorData.message ||
+                "این فیلد الزامی است.";
+
+            errorElement.hidden = false;
+        }
+
+        if (!firstError) {
+            firstError = field;
+        }
+    });
+
+    if (firstError) {
+        firstError.focus();
+        return false;
+    }
+
+    return true;
+};
+
+
+
+const form =
+    document.querySelector(
+        ".workflow-instance > form"
+    );
+
+if (form) {
+
+    validateMainWorkflowForm(form);
+
+    form.addEventListener(
+        "submit",
+        (event) => {
+
+            /* DEVICE rows are submitted only with the main workflow form. */
+        }
+    );
+}
+
+});

@@ -1,0 +1,303 @@
+{% if group.flat_table.rows %}
+  {% for row in group.flat_table.rows %}
+    <tr
+      class="df-repeatable-item df-repeatable-flat-row {% if row.row_group_code != group.group.code %}df-repeatable-child-flat-row{% endif %}"
+      data-repeatable-item
+      data-repeatable-row-group="{{ row.row_group_code }}"
+      data-root-index="{{ row.path.0.1 }}"
+      data-row-path="{{ row.path_key }}"
+      data-row-id="{{ row.row_id }}"
+      data-parent-row-id="{{ row.parent_row_id|default:'' }}"
+    >
+      {% for cell in row.column_cells %}
+        <td
+          {% if not cell.show %}class="df-repeatable-flat-blank"{% endif %}
+          data-column-group="{{ cell.group_code }}"
+          data-field-code="{{ cell.field.code }}"
+        >
+          {% if cell.show %}
+            {% if edit_mode and not dynamic_form.is_submitted and cell.can_edit %}
+              {% if cell.field.system_key == "IMEI" and cell.field_context.is_imei_immutable %}
+                <input type="text" name="{{ cell.input_prefix }}{{ cell.field.code }}" value="{{ cell.display_value|default:cell.value|default:'' }}" class="df-table-input" readonly />
+              {% elif cell.field.system_key == "DEVICE_TYPE" %}
+                <select name="{{ cell.input_prefix }}{{ cell.field.code }}" class="df-table-input" data-system-key="DEVICE_TYPE">
+                  <option value="">---------</option>
+                  {% for choice in cell.field_context.device_types %}
+                    <option value="{{ choice.id }}" {% if cell.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.name }}</option>
+                  {% endfor %}
+                </select>
+              {% elif cell.field.system_key == "DEVICE_MODEL" %}
+                <select name="{{ cell.input_prefix }}{{ cell.field.code }}" class="df-table-input" data-system-key="DEVICE_MODEL" data-device-models-url="{% url 'operator_panel:device_models_by_type' %}">
+                  <option value="">---------</option>
+                  {% for choice in cell.field_context.device_models %}
+                    <option value="{{ choice.id }}" {% if cell.value|stringformat:"s" == choice.id|stringformat:"s" %}selected{% endif %}>{{ choice.name }}</option>
+                  {% endfor %}
+                </select>
+              {% elif cell.field.field_type == "TEXT" %}
+                <input
+                  type="text"
+                  name="{{ cell.input_prefix }}{{ cell.field.code }}"
+                  value="{{ cell.display_value|default:cell.value|default:'' }}"
+                  class="df-table-input"
+                />
+              {% elif cell.field.field_type == "TEXTAREA" %}
+                <textarea
+                  name="{{ cell.input_prefix }}{{ cell.field.code }}"
+                  class="df-table-input df-table-textarea"
+                >{{ cell.value|default:'' }}</textarea>
+              {% elif cell.field.field_type == "NUMBER" %}
+                <input
+                  type="number"
+                  name="{{ cell.input_prefix }}{{ cell.field.code }}"
+                  value="{{ cell.display_value|default:cell.value|default:'' }}"
+                  step="{{ cell.field.number_step }}"
+                  class="df-table-input"
+                />
+              {% elif cell.field.field_type == "DATE" %}
+                <input
+                  type="{% if cell.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if cell.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if cell.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                  name="{{ cell.input_prefix }}{{ cell.field.code }}"
+                  value="{{ cell.display_value|default:cell.value|default:'' }}"
+                  class="df-table-input"
+                />
+              {% elif cell.field.field_type == "DATETIME" %}
+                <input
+                  type="{% if cell.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if cell.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %} {% if cell.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
+                  name="{{ cell.input_prefix }}{{ cell.field.code }}"
+                  value="{{ cell.display_value|default:cell.value|default:'' }}"
+                  class="df-table-input"
+                />
+              {% elif cell.field.field_type == "FORMULA" %}
+                <div class="df-table-value df-table-formula-value df-formula-value">
+                  {{ cell.display_value|default:cell.value|default:"—" }}
+                </div>
+              {% elif cell.field.field_type == "BOOLEAN" %}
+                <input
+                  type="checkbox"
+                  name="{{ cell.input_prefix }}{{ cell.field.code }}"
+                  {% if cell.value %}checked{% endif %}
+                  class="df-table-checkbox"
+                />
+              {% elif cell.field.field_type == "SELECT" %}
+                <select
+                  name="{{ cell.input_prefix }}{{ cell.field.code }}"
+                  class="df-table-input"
+                  data-field-id="{{ cell.field.pk }}"
+                  data-field-code="{{ cell.field.code }}"
+                  {% if cell.field_context.parent_code %}
+                  data-depends-on="{{ cell.field_context.parent_code }}"
+                  data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                  {% endif %}
+                >
+                  <option value="">---------</option>
+                  {% for choice in cell.field_context.choices %}
+                    <option
+                      value="{{ choice.value }}"
+                      {% if cell.value|stringformat:"s" == choice.value|stringformat:"s" %}selected{% endif %}
+                    >
+                      {{ choice.label }}
+                    </option>
+                  {% endfor %}
+                </select>
+              {% endif %}
+            {% else %}
+              {% if cell.field.field_type == "BOOLEAN" %}
+                <input
+                  type="checkbox"
+                  {% if cell.value %}checked{% endif %}
+                  disabled
+                  class="df-table-checkbox"
+                />
+              {% else %}
+                <div class="df-table-value{% if cell.field.field_type == 'FORMULA' %} df-table-formula-value df-formula-value{% endif %}">
+                  {{ cell.display_value|default:cell.value|default:"—" }}
+                </div>
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        </td>
+      {% endfor %}
+
+      <td class="df-table-actions">
+        {% if group.group.group_type == "DEVICE" and row.device_id and row.has_history and can_view_device_history and not is_device_history_view %}
+          <a
+            class="df-button df-button-secondary"
+            href="{% url 'operator_panel:device_history' instance.pk row.device_id %}"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            سوابق
+          </a>
+        {% endif %}
+        {% for id_input in row.id_inputs %}
+          <input
+            type="hidden"
+            name="{{ id_input.name }}"
+            value="{{ id_input.value }}"
+            {% if id_input.is_root %}data-repeatable-root-row-id{% else %}data-repeatable-row-id{% endif %}
+          />
+        {% endfor %}
+        {% if row.device_instance_id_input %}
+          <input
+            type="hidden"
+            name="{{ row.device_instance_id_input.name }}"
+            value="{{ row.device_instance_id_input.value }}"
+          />
+        {% endif %}
+
+        {% for child_action in row.add_children %}
+          <input
+            type="hidden"
+            name="{{ row.path_key }}_{{ child_action.group_code }}__present"
+            value="1"
+            data-repeatable-presence
+          />
+          {% if edit_mode and not dynamic_form.is_submitted and child_action.can_add %}
+            <button
+              type="button"
+              class="df-button df-button-secondary df-repeatable-child-add"
+              data-group-code="{{ child_action.group_code }}"
+              data-parent-row-id="{{ child_action.parent_row_id }}"
+            >
+              + افزودن {{ child_action.group_label }}
+            </button>
+          {% endif %}
+        {% endfor %}
+
+        {% if row.root_delete and edit_mode and not dynamic_form.is_submitted and row.root_delete.can_delete %}
+          <button
+            type="button"
+            class="df-button df-button-danger df-repeatable-root-delete"
+            data-delete-label="{{ row.root_delete.group_label }}"
+            data-group-code="{{ row.root_delete.group_code }}"
+            data-repeatable-root-row-id="{{ row.id_inputs.0.value }}"
+          >
+            حذف {{ row.root_delete.group_label }}
+          </button>
+        {% endif %}
+
+        {% if edit_mode and not dynamic_form.is_submitted and row.can_delete %}
+          <button
+            type="button"
+            class="df-button df-button-danger df-repeatable-delete"
+            data-delete-label="{{ row.delete_group_label }}"
+            data-group-code="{{ row.delete_group_code }}"
+          >
+            حذف {{ row.delete_group_label }}
+          </button>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+{% else %}
+  <tr class="df-table-empty">
+    <td colspan="{{ group.flat_table.columns|length|add:1 }}">
+      هنوز اطلاعاتی برای این گروه ثبت نشده است.
+    </td>
+  </tr>
+{% endif %}
+
+<tr
+  class="df-repeatable-flat-template"
+  data-repeatable-item
+  data-repeatable-template
+  data-repeatable-root-template
+  style="display:none;"
+>
+  {% for column in group.flat_table.columns %}
+    <td data-column-group="{{ column.group_code }}" data-field-code="{{ column.field_context.field.code }}">
+      {% if column.group_code == group.group.code %}
+        {% with field_context=column.field_context %}
+          {% if field_context.field.system_key == "DEVICE_TYPE" %}
+            <select name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" class="df-table-input" data-system-key="DEVICE_TYPE">
+              <option value="">---------</option>
+              {% for choice in field_context.device_types %}
+                <option value="{{ choice.id }}">{{ choice.name }}</option>
+              {% endfor %}
+            </select>
+          {% elif field_context.field.system_key == "DEVICE_MODEL" %}
+            <select name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" class="df-table-input" data-system-key="DEVICE_MODEL" data-device-models-url="{% url 'operator_panel:device_models_by_type' %}">
+              <option value="">---------</option>
+              {% for choice in field_context.device_models %}
+                <option value="{{ choice.id }}">{{ choice.name }}</option>
+              {% endfor %}
+            </select>
+          {% elif field_context.field.field_type == "TEXT" %}
+            <input type="text" name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" value="{{ field_context.value|default:'' }}" class="df-table-input" />
+          {% elif field_context.field.field_type == "TEXTAREA" %}
+            <textarea name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" class="df-table-input df-table-textarea">{{ field_context.value|default:'' }}</textarea>
+          {% elif field_context.field.field_type == "NUMBER" %}
+            <input type="number" name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" step="{{ field_context.field.number_step }}" class="df-table-input" />
+          {% elif field_context.field.field_type == "DATE" %}
+            <input type="{% if field_context.field.calendar == 'JALALI' %}text{% else %}date{% endif %}" {% if field_context.field.calendar == 'JALALI' %}data-jdp{% endif %} name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" class="df-table-input" />
+          {% elif field_context.field.field_type == "DATETIME" %}
+            <input type="{% if field_context.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}" {% if field_context.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true" name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" class="df-table-input" />
+          {% elif field_context.field.field_type == "BOOLEAN" %}
+            <input type="checkbox" name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}" class="df-table-checkbox" />
+          {% elif field_context.field.field_type == "SELECT" %}
+            <select
+              name="{{ group.group.code }}_TEMPLATE_{{ field_context.field.code }}"
+              class="df-table-input"
+              data-field-id="{{ field_context.field.pk }}"
+              data-field-code="{{ field_context.field.code }}"
+              {% if field_context.parent_code %}
+              data-depends-on="{{ field_context.parent_code }}"
+              data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+              {% endif %}
+            >
+              <option value="">---------</option>
+              {% for choice in field_context.choices %}
+                <option value="{{ choice.value }}">{{ choice.label }}</option>
+              {% endfor %}
+            </select>
+          {% endif %}
+        {% endwith %}
+      {% endif %}
+    </td>
+  {% endfor %}
+  <td class="df-table-actions">
+    <input
+      type="hidden"
+      name="{{ group.group.code }}_TEMPLATE__id"
+      value=""
+    />
+    {% if group.group.group_type == "DEVICE" %}
+      <input
+        type="hidden"
+        name="{{ group.group.code }}_TEMPLATE_instance_device_id"
+        value=""
+      />
+    {% endif %}
+    {% for child_template in group.flat_table.child_templates %}
+      <input
+        type="hidden"
+        name="{{ group.group.code }}_TEMPLATE_{{ child_template.group.code }}__present"
+        value="1"
+        data-repeatable-presence
+      />
+      {% if edit_mode and not dynamic_form.is_submitted and child_template.can_add %}
+        <button
+          type="button"
+          class="df-button df-button-secondary df-repeatable-child-add"
+          data-group-code="{{ child_template.group.code }}"
+          data-parent-row-id=""
+        >
+          + افزودن {{ child_template.group.label }}
+        </button>
+      {% endif %}
+    {% endfor %}
+
+    {% if edit_mode and not dynamic_form.is_submitted and group.can_delete %}
+      <button
+        type="button"
+        class="df-button df-button-danger df-repeatable-delete"
+        data-delete-label="{{ group.group.label }}"
+        data-group-code="{{ group.group.code }}"
+      >
+        حذف {{ group.group.label }}
+      </button>
+    {% endif %}
+
+  </td>
+</tr>
+    {% include "operator_panel/_repeatable_flat_table_templates.html" with parent_templates=group.flat_table.child_templates flat_columns=group.flat_table.columns %}

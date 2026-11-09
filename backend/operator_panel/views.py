@@ -1,0 +1,1286 @@
+from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied, ValidationError
+from django.shortcuts import get_object_or_404, redirect, render
+from django.contrib import messages
+from django.http import JsonResponse
+from django.contrib.contenttypes.models import ContentType
+from django.db.models import Max
+from django.urls import reverse
+from workflow.device_services import DeviceService
+from workflow.notification_services import NotificationService
+from workflow.form_services import DynamicFormService
+from workflow.form_draft_save_services import FormDraftSaveService
+from workflow.repeatable_row_read_services import RepeatableRowReadService
+from workflow.authorization import WorkflowAuthorizationService
+from workflow.permission_context import PermissionContext
+from workflow.history_permissions import HISTORY_ACTION
+from workflow.models import (
+    DeviceModel,
+    DeviceIdentifier,
+    FormData,
+    FormDefinition,
+    FormField,
+    FormRepeatableGroup,
+    InstanceDevice,
+    RepeatableRow,
+    RepeatableRowValue,
+    Workflow,
+    WorkflowInstance,
+    WorkflowMembership,
+    WorkflowPermission,
+    WorkflowStep,
+    WorkflowStepExecution,
+    WorkflowTransition,
+    WorkflowTransitionExecution,
+    Notification,
+)
+
+from workflow.services import WorkflowExecutionService
+from workflow.instance_device_services import InstanceDeviceService
+from .form_post_adapter import OperatorPanelFormPostAdapter
+
+
+def formfield_model_fields(request):
+    content_type_id = request.GET.get("content_type")
+
+    if not content_type_id:
+        return JsonResponse({"fields": []})
+
+    try:
+        content_type = ContentType.objects.get(pk=content_type_id)
+    except ContentType.DoesNotExist:
+        return JsonResponse({"fields": []})
+
+    model = content_type.model_class()
+
+    fields = []
+
+    for field in model._meta.get_fields():
+        if not getattr(field, "concrete", False):
+            continue
+
+        if getattr(field, "auto_created", False):
+            continue
+
+        if not getattr(field, "editable", True):
+            continue
+
+        fields.append({
+            "name": field.name,
+            "label": str(field.verbose_name),
+        })
+
+    return JsonResponse({"fields": fields})
+
+@login_required
+def lookup_device_by_imei(request):
+    if request.method != "GET":
+        return JsonResponse(
+            {"error": "روش درخواست نامعتبر است."},
+            status=405,
+        )
+
+    imei = request.GET.get("imei", "").strip()
+
+    if not imei:
+        return JsonResponse({
+            "exists": False,
+        })
+
+    device = DeviceService.get_device_by_identifier(
+        identifier_type=DeviceIdentifier.IdentifierType.IMEI,
+        value=imei,
+    )
+
+    if device is None:
+        return JsonResponse({
+            "exists": False,
+        })
+
+    device_model = device.device_model
+
+    return JsonResponse({
+        "exists": True,
+        "device_id": device.pk,
+        "device_type_id": device_model.device_type_id,
+        "device_model_id": device_model.pk,
+    })
+
+@login_required
+def device_models_by_type(request):
+    device_type_id = request.GET.get("device_type_id")
+
+    if not device_type_id:
+        return JsonResponse({"options": []})
+
+    try:
+        device_type_id = int(device_type_id)
+    except (TypeError, ValueError):
+        return JsonResponse({"options": []})
+
+    models = (
+        DeviceModel.objects
+        .filter(
+            device_type_id=device_type_id,
+            # اگر DeviceModel فیلد is_active دارد، این خط را هم اضافه کن:
+            # is_active=True,
+        )
+        .order_by("name")
+    )
+
+    return JsonResponse({
+        "options": [
+            {
+                "value": str(model.pk),
+                "label": model.name,
+            }
+            for model in models
+        ]
+    })
+
+@login_required
+def dependent_field_options(request):
+    """
+    Return dependent SELECT options only for a field the current user
+    is authorized to view in the workflow instance's current step.
+    """
+    if request.method != "GET":
+        return JsonResponse(
+            {"error": "روش درخواست نامعتبر است."},
+            status=405,
+        )
+
+    instance_id = request.GET.get("instance_id", "").strip()
+    field_id = request.GET.get("field_id", "").strip()
+    parent_value = request.GET.get("parent_value", "")
+
+    if not instance_id or not field_id:
+        return JsonResponse({"options": []})
+
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related(
+            "workflow",
+            "current_step",
+        ),
+        pk=instance_id,
+    )
+
+    if request.GET.get("source") == "my_processes":
+        is_workflow_member = WorkflowMembership.objects.filter(
+            workflow=instance.workflow,
+            user=request.user,
+            is_active=True,
+        ).exists()
+        if not is_workflow_member:
+            raise PermissionDenied(
+                "کاربر عضو این فرآیند نیست."
+            )
+    else:
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            step=instance.current_step,
+            instance=instance,
+        )
+
+    try:
+        field = (
+            FormField.objects
+            .select_related(
+                "section",
+                "section__form",
+                "section__form__workflow",
+                "choice_parent_field",
+            )
+            .get(
+                pk=field_id,
+                is_active=True,
+                field_type=FormField.FieldType.SELECT,
+                choice_parent_field__isnull=False,
+            )
+        )
+    except FormField.DoesNotExist:
+        return JsonResponse({"options": []})
+
+    if field.section.form.workflow_id != instance.workflow_id:
+        raise PermissionDenied(
+            "فیلد متعلق به فرآیند جاری نیست."
+        )
+
+    permission_context = PermissionContext.build(
+        workflow=instance.workflow,
+        form=field.section.form,
+        step=instance.current_step,
+        user=request.user,
+    )
+
+    if not permission_context.field(field).can_view:
+        raise PermissionDenied(
+            "کاربر اجازه مشاهده این فیلد را ندارد."
+        )
+
+    options = DynamicFormService._dependent_choices(
+        field,
+        parent_value,
+    )
+
+    return JsonResponse({
+        "options": options,
+    })
+
+@login_required
+def dashboard(request):
+    workflows = (
+        WorkflowAuthorizationService
+        .get_startable_workflows(
+            user=request.user,
+        )
+        .order_by("name")
+    )
+
+    instances = (
+        WorkflowInstance.objects
+        .filter(
+            started_by=request.user,
+        )
+        .exclude(
+            status=WorkflowInstance.Status.DRAFT,
+        )
+        .select_related(
+            "workflow",
+            "current_step",
+        )
+        .order_by("-started_at")
+    )
+
+    return render(
+        request,
+        "operator_panel/dashboard.html",
+        {
+            "user": request.user,
+            "workflows": workflows,
+            "instances": instances,
+        },
+    )
+
+
+@login_required
+def workflow_instance(request, instance_id, _return_save_result=False, _pending_acceptance=False, _pending_acceptance_step=None):
+    """
+    Display and save a workflow instance form.
+
+    Form lifecycle:
+
+        Initial state
+            ↓
+        Editable
+            ↓
+        Save
+            ↓
+        Read-only
+            ↓
+        Edit
+            ↓
+        Editable
+            ↓
+        Submit
+            ↓
+        Locked
+    """
+
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related(
+            "workflow",
+            "current_step",
+        ),
+        pk=instance_id,
+    )
+
+    source = request.GET.get("source")
+
+    if _pending_acceptance:
+        if request.method != "GET":
+            raise PermissionDenied(
+                "صفحه تأیید دریافت فقط به صورت خواندنی قابل مشاهده است."
+            )
+        source = "pending_acceptance"
+
+    if source in {"my_processes", "history_device"}:
+        if source in {"history_device", "acceptance_result"} and request.method != "GET":
+            raise PermissionDenied("این صفحه فقط به صورت خواندنی قابل مشاهده است.")
+        is_workflow_member = WorkflowMembership.objects.filter(
+            workflow=instance.workflow,
+            user=request.user,
+            is_active=True,
+        ).exists()
+        if not is_workflow_member:
+            raise PermissionDenied("کاربر عضو این فرآیند نیست.")
+    elif source == "pending_acceptance":
+        # Entry authorization is performed by the dedicated view against
+        # PendingAcceptanceQueueService. The normal VIEW permission path
+        # remains unchanged for every other route.
+        pass
+    elif source == "acceptance_result":
+        transition_execution_id = request.GET.get(
+            "transition_execution"
+        )
+        if not transition_execution_id or not transition_execution_id.isdigit():
+            raise PermissionDenied(
+                "اجرای تأیید برای مشاهده نتیجه مشخص نشده است."
+            )
+
+        acceptance_execution = (
+            WorkflowTransitionExecution.objects
+            .select_related(
+                "transition",
+                "transition__reject_to_step",
+            )
+            .filter(
+                pk=int(transition_execution_id),
+                instance=instance,
+                status=WorkflowTransitionExecution.Status.ACCEPTED,
+                transition__requires_acceptance=True,
+            )
+            .first()
+        )
+        if acceptance_execution is None:
+            raise PermissionDenied(
+                "نتیجه تأیید معتبر نیست."
+            )
+
+        acceptance_read_step = acceptance_execution.transition.reject_to_step
+        if acceptance_read_step is None:
+            raise PermissionDenied(
+                "مرحله مشاهده نتیجه تأیید مشخص نشده است."
+            )
+
+        read_context_step = acceptance_read_step
+        historical_read_context = True
+
+    elif source == "history":
+        if request.method != "GET":
+            raise PermissionDenied("سوابق فرآیند فقط به صورت خواندنی قابل مشاهده است.")
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=HISTORY_ACTION,
+        )
+    else:
+        WorkflowAuthorizationService.require_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.VIEW,
+            step=instance.current_step,
+            instance=instance,
+        )
+
+    # Opening a workflow instance through any authorized route means the
+    # user has seen the process; clear its stale unread notifications so
+    # the bell does not later navigate to an obsolete step context.
+    NotificationService.mark_instance_notifications_as_read(
+        user=request.user,
+        workflow_instance=instance,
+    )
+
+    can_view_device_history = WorkflowAuthorizationService.has_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=HISTORY_ACTION,
+    )
+
+    # =========================================================
+    # EDIT MODE
+    # =========================================================
+    #
+    # Edit is an explicit action.
+    #
+    # We intentionally do NOT infer edit_mode from the existence
+    # of saved data.
+    #
+    # Therefore:
+    #
+    #   Save  -> readonly
+    #   Edit  -> editable
+    #
+    # =========================================================
+
+    # =========================================================
+    # GET
+    # =========================================================
+
+    pending_acceptance_can_accept = False
+    pending_acceptance_can_reject = False
+    if _pending_acceptance and _pending_acceptance_step is not None:
+        pending_acceptance_can_accept = WorkflowAuthorizationService.has_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="ACCEPT",
+            step=_pending_acceptance_step,
+        )
+        pending_acceptance_can_reject = WorkflowAuthorizationService.has_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=WorkflowPermission.Action.STEP_ACTION,
+            action_code="REJECT",
+            step=_pending_acceptance_step,
+        )
+
+    has_pending_acceptance = instance.transition_executions.filter(
+        status=WorkflowTransitionExecution.Status.PENDING,
+        transition__requires_acceptance=True,
+        transition__from_step_id=instance.current_step_id,
+    ).exists()
+
+    transitions = () if (
+        _pending_acceptance
+        or has_pending_acceptance
+        or source == "acceptance_result"
+    ) else (
+        WorkflowAuthorizationService
+        .get_allowed_transitions(
+            user=request.user,
+            workflow=instance.workflow,
+            from_step=instance.current_step,
+        )
+    )
+
+    # ---------------------------------------------------------
+    # Read-context step
+    # ---------------------------------------------------------
+    # A completed instance has no current step. Walk submitted
+    # history from newest to oldest and use the newest step for
+    # which this operator has any configured view access to the
+    # form. This keeps completed "My Processes" reads scoped to
+    # the latest historical step the operator can actually see.
+    read_context_step = instance.current_step
+    historical_read_context = False
+
+    form = (
+        FormDefinition.objects
+        .filter(
+            workflow=instance.workflow,
+            is_active=True,
+        )
+        .first()
+    )
+
+    if _pending_acceptance:
+        read_context_step = _pending_acceptance_step or instance.current_step
+    elif source == "acceptance_result":
+        # The acceptance_result authorization above already binds the
+        # read context to the accepted transition's reject_to_step.
+        pass
+    elif source == "history":
+        historical_step = _get_historical_view_step(
+            instance=instance,
+            user=request.user,
+            form=form,
+        )
+        if historical_step is None:
+            raise PermissionDenied(
+                "برای این فرآیند سابقه قابل مشاهده‌ای وجود ندارد."
+            )
+        read_context_step = historical_step
+        historical_read_context = True
+    elif read_context_step is None:
+        read_context_step = _get_historical_view_step(
+            instance=instance,
+            user=request.user,
+            form=form,
+        )
+        historical_read_context = read_context_step is not None
+    elif (
+        source in {"my_processes", "history_device"}
+        or (
+            instance.step_executions.filter(
+                performed_by=request.user,
+                is_submitted=True,
+            ).exists()
+            and instance.current_step.assigned_to_id != request.user.pk
+        )
+    ):
+        historical_step = _get_historical_view_step(
+            instance=instance,
+            user=request.user,
+            form=form,
+            assigned_to=request.user,
+        )
+        if historical_step is not None:
+            read_context_step = historical_step
+            historical_read_context = True
+
+    current_step_execution = (
+        instance.step_executions
+        .filter(workflow_step=read_context_step)
+        .order_by("-performed_at")
+        .first()
+        if read_context_step is not None
+        else None
+    )
+
+    # ---------------------------------------------------------
+    # Determine whether current step is submitted
+    # ---------------------------------------------------------
+
+    is_submitted = (
+        current_step_execution is not None
+        and current_step_execution.is_submitted
+    )
+
+    # ---------------------------------------------------------
+    # Determine whether data has already been saved
+    # ---------------------------------------------------------
+
+    form_data = (
+        FormData.objects
+        .filter(
+            instance=instance,
+        )
+        .first()
+    )
+
+    has_form_data = (
+        form_data is not None
+        and bool(form_data.data)
+    )
+
+    reconstructed_repeatable = RepeatableRowReadService.reconstruct_instance(
+        instance=instance,
+    )
+    has_repeatable_data = any(
+        group.get("items")
+        for group in reconstructed_repeatable.get("groups", [])
+    )
+
+    has_device_data = (
+        InstanceDevice.objects
+        .filter(
+            instance=instance,
+            is_active=True,
+        )
+        .exists()
+    )
+
+    has_saved_data = (
+        has_form_data
+        or has_repeatable_data
+        or has_device_data
+    )
+
+    # Use the canonical edit_mode derivation
+    edit_mode = False if _pending_acceptance else _get_edit_mode(
+        instance=instance,
+        request=request,
+    )
+
+    if historical_read_context and not _pending_acceptance:
+        edit_mode = False
+        transitions = ()
+
+    # =========================================================
+    # POST
+    # =========================================================
+
+    if request.method == "POST":
+
+        # -----------------------------------------------------
+        # Save
+        # -----------------------------------------------------
+
+        try:
+
+            payload = OperatorPanelFormPostAdapter.adapt(
+                form=FormDefinition.objects.get(
+                    workflow=instance.workflow,
+                    is_active=True,
+                ),
+                submitted_data=request.POST,
+                instance=instance,
+            )
+            save_result = FormDraftSaveService.save(
+                instance=instance,
+                step=instance.current_step,
+                user=request.user,
+                submitted_data=payload,
+                edit_mode=edit_mode,
+            )
+
+        except ValidationError as exc:
+
+            # -------------------------------------------------
+            # Validation failed
+            #
+            # Keep the operator in edit mode and rebuild the
+            # form from submitted POST data so the entered
+            # values are not lost.
+            # -------------------------------------------------
+
+            form_context = (
+                DynamicFormService.get_form_for_step(
+                    instance=instance,
+                    user=request.user,
+                    submitted_data=request.POST,
+                    edit_mode=True,
+                )
+            )
+
+            # -------------------------------------------------
+            # Normal fields
+            # -------------------------------------------------
+
+            for section in form_context["sections"]:
+
+                for item in section["fields"]:
+
+                    if item["field"].code in request.POST:
+
+                        item["value"] = request.POST.get(
+                            item["field"].code,
+                            "",
+                        )
+
+            # -------------------------------------------------
+            # Non-device repeatable groups
+            # -------------------------------------------------
+
+            for section in form_context["sections"]:
+
+                for group in section["repeatable_groups"]:
+
+                    if (
+                        group["group"].group_type
+                        == "DEVICE"
+                    ):
+                        continue
+
+                    group_code = group["group"].code
+
+                    items = (
+                        DynamicFormService
+                        ._parse_repeatable_data(
+                            submitted_data=request.POST,
+                            group_code=group_code,
+                        )
+                    )
+
+                    for index, raw_item in enumerate(items):
+
+                        if index >= len(group["items"]):
+                            break
+
+                        for item_field in group["items"][index]["fields"]:
+
+                            field_code = (
+                                item_field["field"].code
+                            )
+
+                            if field_code in raw_item:
+
+                                item_field["value"] = (
+                                    raw_item[field_code]
+                                )
+
+            # -------------------------------------------------
+            # Validation errors
+            # -------------------------------------------------
+
+            validation_errors = getattr(
+                exc,
+                "validation_errors",
+                [],
+            )
+
+            transitions = (
+                WorkflowAuthorizationService
+                .get_allowed_transitions(
+                    user=request.user,
+                    workflow=instance.workflow,
+                    from_step=instance.current_step,
+                )
+            )
+
+            # Validation failure means the form must remain
+            # editable so the operator can correct it.
+            edit_mode = True
+
+            return render(
+                request,
+                "operator_panel/workflow_instance.html",
+                {
+                    "instance": instance,
+                    "transitions": transitions,
+                    "dynamic_form": form_context,
+                    "error": (
+                        str(exc)
+                        if not validation_errors
+                        else ""
+                    ),
+                    "edit_mode": edit_mode,
+                    "can_view_device_history": can_view_device_history,
+                    "validation_errors": validation_errors,
+                    "page_title": instance.workflow.name,
+                    "page_breadcrumb": instance.workflow.name,
+                },
+                status=400,
+            )
+
+        # -----------------------------------------------------
+        # Successful Save
+        # -----------------------------------------------------
+        #
+        # IMPORTANT:
+        #
+        # A successful Save does NOT mean Submit.
+        #
+        # The data is saved as Draft/working data, but the UI
+        # becomes read-only.
+        #
+        # The operator must explicitly press Edit to continue.
+        # -----------------------------------------------------
+
+        response = redirect(
+            "operator_panel:workflow_instance",
+            instance_id=instance.pk,
+        )
+        if _return_save_result:
+            return response, save_result
+        return response
+
+    # =========================================================
+    # BUILD DYNAMIC FORM
+    # =========================================================
+
+    dynamic_form = (
+        DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=request.user,
+            edit_mode=edit_mode,
+            read_context_step=read_context_step,
+        )
+    )
+
+
+    # =========================================================
+    # FINAL CONTEXT
+    # =========================================================
+
+    return render(
+        request,
+        "operator_panel/workflow_instance.html",
+        {
+            "instance": instance,
+            "transitions": transitions,
+            "dynamic_form": dynamic_form,
+            "edit_mode": edit_mode,
+            "can_view_device_history": can_view_device_history,
+            "is_device_history_view": source == "history_device",
+            "current_step_execution": current_step_execution,
+            "has_saved_data": has_saved_data,
+            "page_title": instance.workflow.name,
+            "page_breadcrumb": instance.workflow.name,
+            "pending_acceptance": _pending_acceptance,
+            "pending_acceptance_can_accept": pending_acceptance_can_accept,
+            "pending_acceptance_can_reject": pending_acceptance_can_reject,
+        },
+    )
+
+
+def _get_historical_view_step(
+    *,
+    instance,
+    user,
+    form,
+    performed_by=None,
+    assigned_to=None,
+):
+    """Return the newest submitted historical step visible to the user."""
+    if form is None:
+        return None
+
+    executions = (
+        instance.step_executions
+        .filter(
+            is_submitted=True,
+        )
+    )
+    if performed_by is not None:
+        executions = executions.filter(performed_by=performed_by)
+    if assigned_to is not None:
+        executions = executions.filter(
+            workflow_step__assigned_to=assigned_to,
+        )
+
+    executions = (
+        executions
+        .order_by("-submitted_at", "-performed_at")
+        .select_related("workflow_step")
+    )
+
+    for execution in executions:
+        step = execution.workflow_step
+        permission_context = PermissionContext.build(
+            workflow=instance.workflow,
+            form=form,
+            step=step,
+            user=user,
+        )
+
+        if (
+            any(
+                permission.can_view
+                for permission in permission_context.normal_fields.values()
+            )
+            or any(
+                permission.can_view
+                for permission in permission_context.repeatable_fields.values()
+            )
+            or any(
+                permission.can_view
+                for permission in permission_context.groups.values()
+            )
+        ):
+            return step
+
+    return None
+
+
+def _require_device_group_delete_permission(*, instance, user, group_code, request):
+    current_execution = (
+        instance.step_executions
+        .filter(workflow_step=instance.current_step)
+        .order_by("-performed_at")
+        .first()
+    )
+    if current_execution and current_execution.is_submitted:
+        raise ValidationError("این مرحله دیگر قابل ویرایش نیست.")
+
+    edit_mode = _get_edit_mode(
+        instance=instance,
+        request=request,
+    )
+    if not edit_mode:
+        raise PermissionDenied("فرم در حالت ویرایش نیست و حذف دستگاه مجاز نیست.")
+
+    group = get_object_or_404(
+        FormRepeatableGroup,
+        code=group_code,
+        group_type=FormRepeatableGroup.GroupType.DEVICE,
+        is_active=True,
+        section__form__workflow=instance.workflow,
+        section__form__is_active=True,
+    )
+
+    form = group.section.form
+    permission_context = PermissionContext.build(
+        workflow=instance.workflow,
+        form=form,
+        step=instance.current_step,
+        user=user,
+    )
+
+    if not permission_context.group(group).can_delete:
+        raise PermissionDenied("کاربر اجازه حذف دستگاه را ندارد.")
+
+    return group
+
+
+@login_required
+def delete_device(request, instance_id, group_code, row_id):
+    if request.method != "POST":
+        return redirect("operator_panel:workflow_instance", instance_id=instance_id)
+
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related("workflow", "current_step"),
+        pk=instance_id,
+    )
+    WorkflowAuthorizationService.require_permission(
+        user=request.user,
+        workflow=instance.workflow,
+        action=WorkflowPermission.Action.VIEW,
+        step=instance.current_step,
+        instance=instance,
+    )
+    _require_device_group_delete_permission(
+        instance=instance,
+        user=request.user,
+        group_code=group_code,
+        request=request,
+    )
+    get_object_or_404(
+        RepeatableRow,
+        pk=row_id,
+        instance=instance,
+        group__code=group_code,
+        group__group_type=FormRepeatableGroup.GroupType.DEVICE,
+    )
+    from workflow.form_draft_delete_apply_services import FormDraftDeleteApplyService
+    FormDraftDeleteApplyService.delete_row_tree(
+        instance=instance,
+        row_id=row_id,
+    )
+    messages.success(request, "دستگاه از این فرآیند حذف شد.")
+    return redirect("operator_panel:workflow_instance", instance_id=instance.pk)
+
+
+
+@login_required
+def execute_transition(request, instance_id, transition_id):
+    """
+    Execute a workflow transition for an instance.
+    """
+
+    if request.method != "POST":
+        return redirect(
+            "operator_panel:workflow_instance",
+            instance_id=instance_id,
+        )
+
+    instance = get_object_or_404(
+        WorkflowInstance.objects.select_related(
+            "workflow",
+            "current_step",
+        ),
+        pk=instance_id,
+    )
+
+    transition = get_object_or_404(
+        WorkflowTransition.objects.select_related(
+            "workflow",
+            "from_step",
+            "to_step",
+        ),
+        pk=transition_id,
+    )
+
+    try:
+        WorkflowExecutionService.execute_transition(
+            instance=instance,
+            transition=transition,
+            user=request.user,
+            notes=request.POST.get("notes", ""),
+        )
+
+    except PermissionDenied:
+        raise
+
+    except ValidationError as exc:
+        # Submit validation returns structured dictionaries. Rendering the
+        # exception with str(exc) flattens those dictionaries into an
+        # unreadable Python-list representation. Rebuild the editable form
+        # and pass the structured errors to the same field/group error UI
+        # used by the normal form validation flow.
+        validation_errors = list(
+            getattr(exc, "validation_errors", [])
+        )
+
+        form_context = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=request.user,
+            edit_mode=True,
+        )
+
+        can_view_device_history = WorkflowAuthorizationService.has_permission(
+            user=request.user,
+            workflow=instance.workflow,
+            action=HISTORY_ACTION,
+        )
+
+        transitions = (
+            WorkflowAuthorizationService
+            .get_allowed_transitions(
+                user=request.user,
+                workflow=instance.workflow,
+                from_step=instance.current_step,
+            )
+        )
+
+        return render(
+            request,
+            "operator_panel/workflow_instance.html",
+            {
+                "instance": instance,
+                "transitions": transitions,
+                "dynamic_form": form_context,
+                "error": (
+                    ""
+                    if validation_errors
+                    else str(exc)
+                ),
+                "edit_mode": True,
+                "can_view_device_history": can_view_device_history,
+                "validation_errors": validation_errors,
+                "page_title": instance.workflow.name,
+                "page_breadcrumb": instance.workflow.name,
+            },
+            status=400,
+        )
+
+    if transition.to_step:
+        messages.success(
+            request,
+            f"فرآیند با موفقیت به «{transition.to_step.name}» منتقل شد.",
+        )
+    else:
+        messages.success(
+            request,
+            f"فرآیند «{instance.workflow.name}» با موفقیت تکمیل شد.",
+        )
+
+    return redirect(
+        "operator_panel:dashboard",
+    )
+
+@login_required
+def start_workflow(request, workflow_id):
+    """
+    Start a new workflow instance.
+    """
+
+    if request.method != "POST":
+        return redirect(
+            "operator_panel:dashboard",
+        )
+
+    workflow = get_object_or_404(
+        Workflow,
+        pk=workflow_id,
+        is_active=True,
+    )
+
+    try:
+        instance = WorkflowExecutionService.start_workflow(
+            workflow=workflow,
+            user=request.user,
+        )
+
+    except PermissionDenied:
+        raise
+
+    except ValidationError as exc:
+        # Surface the failure through the normal dashboard flow instead
+        # of rendering an incomplete dashboard template that hides the
+        # error and drops all of its context.
+        messages.error(request, str(exc))
+        return redirect(
+            "operator_panel:dashboard",
+        )
+
+    return redirect(
+        "operator_panel:workflow_instance",
+        instance_id=instance.pk,
+    )
+
+def _get_edit_mode(*, instance, request):
+    if instance.current_step is None:
+        return False
+
+    current_step_execution = (
+        instance.step_executions
+        .filter(
+            workflow_step=instance.current_step,
+        )
+        .order_by("-performed_at")
+        .first()
+    )
+
+    if (
+        current_step_execution is not None
+        and current_step_execution.is_submitted
+    ):
+        return False
+
+    if request.GET.get("edit") == "1":
+        return True
+
+    form_data = (
+        FormData.objects
+        .filter(instance=instance)
+        .first()
+    )
+
+    # Determine the latest persisted form state across every storage
+    # backing the current dynamic form. Repeatable values are canonical
+    # persisted data too, so FormData.updated_at alone cannot tell us
+    # whether the current step has already been saved.
+    timestamps = []
+
+    if form_data is not None:
+        timestamps.append(form_data.updated_at)
+
+    latest_repeatable_row = (
+        RepeatableRow.objects
+        .filter(instance=instance)
+        .aggregate(latest=Max("updated_at"))
+        ["latest"]
+    )
+    if latest_repeatable_row is not None:
+        timestamps.append(latest_repeatable_row)
+
+    latest_repeatable_value = (
+        RepeatableRowValue.objects
+        .filter(row__instance=instance)
+        .aggregate(latest=Max("updated_at"))
+        ["latest"]
+    )
+    if latest_repeatable_value is not None:
+        timestamps.append(latest_repeatable_value)
+
+    latest_instance_device = (
+        InstanceDevice.objects
+        .filter(instance=instance, is_active=True)
+        .aggregate(latest=Max("updated_at"))
+        ["latest"]
+    )
+    if latest_instance_device is not None:
+        timestamps.append(latest_instance_device)
+
+    # If the current step was activated after the latest persisted data,
+    # the operator has not saved anything in this step yet.
+    if current_step_execution is not None:
+        if (
+            not timestamps
+            or max(timestamps) <= current_step_execution.performed_at
+        ):
+            return True
+
+    form_data_has_data = (
+        form_data is not None
+        and bool(form_data.data)
+    )
+
+    reconstructed_repeatable = RepeatableRowReadService.reconstruct_instance(
+        instance=instance,
+    )
+    has_repeatable_data = any(
+        group.get("items")
+        for group in reconstructed_repeatable.get("groups", [])
+    )
+
+    has_device_data = (
+        InstanceDevice.objects
+        .filter(
+            instance=instance,
+            is_active=True,
+        )
+        .exists()
+    )
+
+    has_saved_data = (
+        form_data_has_data
+        or has_repeatable_data
+        or has_device_data
+    )
+
+    if has_saved_data:
+        return False
+
+    return True
+
+@login_required
+def notifications(request):
+    unread = NotificationService.get_unread(
+        user=request.user,
+    )
+
+    data = []
+
+    for notification in unread[:20]:
+        data.append(
+            {
+                "id": notification.id,
+                "title": notification.title,
+                "message": notification.message,
+                "type": notification.notification_type,
+                "created_at": notification.created_at.isoformat(),
+                "workflow_instance_id": (
+                    notification.workflow_instance_id
+                ),
+                "file_share_message_url": (
+                    f"{reverse('operator_panel:file_share_inbox_page')}?message_id={notification.file_share_message_id}"
+                    if notification.file_share_message_id else None
+                ),
+                "workflow_instance_url": (
+                    f"{reverse('operator_panel:file_share_inbox_page')}?message_id={notification.file_share_message_id}"
+                    if notification.file_share_message_id else (
+                    (
+                        reverse(
+                            "operator_panel:pending_acceptance_detail",
+                            args=[notification.transition_execution_id],
+                        )
+                        if (
+                            notification.workflow_instance_id
+                            and notification.transition_execution_id
+                            and notification.transition_execution.status
+                            == WorkflowTransitionExecution.Status.PENDING
+                            and notification.transition_execution.transition.requires_acceptance
+                        )
+                        else (
+                            (
+                                f"{reverse(
+                                    'operator_panel:workflow_instance',
+                                    args=[notification.workflow_instance_id],
+                                )}?source=acceptance_result"
+                                f"&transition_execution={notification.transition_execution_id}"
+                            )
+                            if (
+                                notification.workflow_instance_id
+                                and notification.transition_execution_id
+                                and notification.transition_execution.status
+                                == WorkflowTransitionExecution.Status.ACCEPTED
+                                and notification.transition_execution.transition.requires_acceptance
+                                and notification.transition_execution.transition.reject_to_step_id
+                            )
+                            else (
+                                reverse(
+                                    "operator_panel:workflow_instance",
+                                    args=[notification.workflow_instance_id],
+                                )
+                                if notification.workflow_instance_id
+                                else None
+                            )
+                        )
+                    )
+                    )
+                ),
+            }
+        )
+
+    return JsonResponse(
+        {
+            "count": unread.count(),
+            "notifications": data,
+        }
+    )
+
+
+@login_required
+def mark_notification_as_read(
+    request,
+    notification_id,
+):
+    if request.method != "POST":
+        return JsonResponse(
+            {"success": False},
+            status=405,
+        )
+
+    notification = get_object_or_404(
+        Notification,
+        pk=notification_id,
+        recipient=request.user,
+    )
+
+    success = NotificationService.mark_as_read(
+        notification=notification,
+        user=request.user,
+    )
+
+    return JsonResponse(
+        {
+            "success": success,
+            "notification_id": notification.id,
+            "is_read": notification.is_read,
+        }
+    )

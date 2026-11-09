@@ -1,0 +1,488 @@
+{% for child_group in item.child_groups %}
+                      {% if child_group.group.display_type == "TABLE" %}
+                        <section
+                          class="df-repeatable-group df-repeatable-child-group df-table-group"
+                          data-repeatable-group="{{ child_group.group.code }}"
+                        >
+                          <div class="df-form-section-header">
+                            <div>
+                              <h4>{{ child_group.group.label }}</h4>
+                            </div>
+
+                            {% if edit_mode and not dynamic_form.is_submitted and child_group.can_add %}
+                              <button
+                                type="button"
+                                class="df-button df-button-secondary df-repeatable-add"
+                                data-group-code="{{ child_group.group.code }}"
+                              >
+                                + افزودن {{ child_group.group.label }}
+                              </button>
+                            {% endif %}
+                          </div>
+
+                          <input
+                            type="hidden"
+                            name="{{ name_prefix }}_{{ child_group.group.code }}__present"
+                            value="1"
+                            data-repeatable-presence
+                          />
+
+                          <div class="df-table-wrapper">
+                            <table class="df-normal-table">
+                              <thead>
+                                <tr>
+                                  {% for field_info in child_group.fields %}
+                                    <th scope="col">{{ field_info.field.label }}</th>
+                                  {% endfor %}
+                                  <th scope="col">عملیات</th>
+                                </tr>
+                              </thead>
+
+                              <tbody
+                                class="df-repeatable-items"
+                                data-group-code="{{ child_group.group.code }}"
+                              >
+                                {% if child_group.items %}
+                                  {% for child_item in child_group.items %}
+                                    {% with child_index=forloop.counter0 %}
+                                      <tr
+                                        class="df-repeatable-item"
+                                        data-repeatable-item
+                                        {% if child_item.row_id %}data-row-id="{{ child_item.row_id }}"{% endif %}
+                                      >
+                                        {% for child_field in child_item.fields %}
+                                          <td>
+                                            <label
+                                              class="df-accessible-label"
+                                              for="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                            >
+                                              {{ child_field.field.label }}
+                                            </label>
+                                            {% if edit_mode and not dynamic_form.is_submitted and child_field.can_edit %}
+                                              {% if child_field.field.field_type == "TEXT" %}
+                                                <input
+                                                  type="text"
+                                                  id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                                  value="{{ child_field.value|default:'' }}"
+                                                  class="df-table-input"
+                                                />
+                                              {% elif child_field.field.field_type == "TEXTAREA" %}
+                                                <textarea
+                                                  id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                                  class="df-table-input df-table-textarea"
+                                                >{{ child_field.value|default:'' }}</textarea>
+                                              {% elif child_field.field.field_type == "NUMBER" %}
+                                                <input
+                                                  type="number"
+                                                  id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                                  value="{{ child_field.display_value|default:child_field.value|default:'' }}"
+                                                  step="{{ child_field.field.number_step }}"
+                                                  class="df-table-input"
+                                                />
+                                              {% elif child_field.field.field_type == "DATE" %}
+                                                <input
+                                                  type="{% if child_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if child_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if child_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                                                  id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                                  value="{{ child_field.display_value|default:child_field.value|default:'' }}"
+                                                  class="df-table-input"
+                                                />
+                                              {% elif child_field.field.field_type == "DATETIME" %}
+                                                <input
+                                                  type="{% if child_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if child_field.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %} {% if child_field.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
+                                                  id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                                  value="{{ child_field.display_value|default:child_field.value|default:'' }}"
+                                                  class="df-table-input"
+                                                />
+                                              {% elif child_field.field.field_type == "BOOLEAN" %}
+                                                <input
+                                                  type="checkbox"
+                                                  id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                                  {% if child_field.value %}checked{% endif %}
+                                                  class="df-table-checkbox"
+                                                />
+                                              {% elif child_field.field.field_type == "SELECT" %}
+                                                <select
+                                                  id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                                  class="df-table-input"
+                                                  data-field-id="{{ child_field.field.pk }}"
+                                                  data-field-code="{{ child_field.field.code }}"
+                                                  {% if child_field.parent_code %}
+                                                  data-depends-on="{{ child_field.parent_code }}"
+                                                  data-options-url="{% url 'operator_panel:dependent_field_options' %}"
+                                                  {% endif %}
+                                                >
+                                                  <option value="">---------</option>
+                                                  {% for choice in child_field.choices %}
+                                                    <option
+                                                      value="{{ choice.value }}"
+                                                      {% if child_field.value|stringformat:"s" == choice.value|stringformat:"s" %}selected{% endif %}
+                                                    >
+                                                      {{ choice.label }}
+                                                    </option>
+                                                  {% endfor %}
+                                                </select>
+                                              {% endif %}
+                                            {% else %}
+                                              {% if child_field.field.field_type == "BOOLEAN" %}
+                                                <input
+                                                  type="checkbox"
+                                                  {% if child_field.value %}checked{% endif %}
+                                                  disabled
+                                                  class="df-table-checkbox"
+                                                />
+                                              {% else %}
+                                                <div class="df-form-value">
+                                                  {{ child_field.display_value|default:child_field.value|default:"—" }}
+                                                </div>
+                                              {% endif %}
+                                            {% endif %}
+                                          </td>
+                                        {% endfor %}
+
+                                        <td class="df-table-actions">
+                                          {% if edit_mode and not dynamic_form.is_submitted and child_group.can_delete %}
+                                            <button
+                                              type="button"
+                                              class="df-button df-button-danger df-repeatable-delete"
+                                              title="حذف {{ child_group.group.label }}"
+                                              data-delete-label="{{ child_group.group.label }}"
+                                            >
+                                              حذف {{ child_group.group.label }}
+                                            </button>
+                                          {% endif %}
+                                        {% if child_item.row_id %}
+                                          <input
+                                            type="hidden"
+                                            name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}__id"
+                                            value="{{ child_item.row_id }}"
+                                          />
+                                        {% endif %}
+                                        </td>
+                                      </tr>
+                                      {% endwith %}
+                                  {% endfor %}
+                                {% else %}
+                                  <tr class="df-table-empty">
+                                    <td colspan="{{ child_group.fields|length|add:1 }}">
+                                      هنوز اطلاعاتی برای این گروه ثبت نشده است.
+                                    </td>
+                                  </tr>
+
+                                  {% if edit_mode and not dynamic_form.is_submitted and child_group.can_add %}
+                                    <tr
+                                      class="df-repeatable-item"
+                                      data-repeatable-item
+                                      data-repeatable-template
+                                      style="display:none;"
+                                    >
+                                      {% for template_field in child_group.fields %}
+                                        <td>
+                                          {% if template_field.field.field_type == "TEXT" %}
+                                            <input
+                                              type="text"
+                                              id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              value="{{ template_field.value|default:'' }}"
+                                              step="{{ template_field.field.number_step }}"
+                                              class="df-table-input"
+                                            />
+                                          {% elif template_field.field.field_type == "TEXTAREA" %}
+                                            <textarea
+                                              id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input df-table-textarea"
+                                            >{{ template_field.value|default:'' }}</textarea>
+                                          {% elif template_field.field.field_type == "NUMBER" %}
+                                            <input
+                                              type="number"
+                                              id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              step="{{ template_field.field.number_step }}"
+                                              class="df-table-input"
+                                            />
+                                          {% elif template_field.field.field_type == "DATE" %}
+                                            <input
+                                              type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %} {% if template_field.field.calendar == 'JALALI' %}data-jdp{% endif %}
+                                              id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input"
+                                            />
+                                          {% elif template_field.field.field_type == "DATETIME" %}
+                                            <input
+                                              type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %} {% if template_field.field.calendar == 'JALALI' %}data-jdp{% endif %} data-jdp-has-second="true"
+                                              id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input"
+                                            />
+                                          {% elif template_field.field.field_type == "BOOLEAN" %}
+                                            <input
+                                              type="checkbox"
+                                              id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-checkbox"
+                                            />
+                                          {% elif template_field.field.field_type == "SELECT" %}
+                                            <select
+                                              id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              class="df-table-input"
+                                            >
+                                              <option value="">---------</option>
+                                            </select>
+                                          {% endif %}
+                                        </td>
+                                      {% endfor %}
+                                      <td class="df-table-actions">
+                                        {% if child_group.can_delete %}
+                                          <button
+                                            type="button"
+                                            class="df-button df-button-danger df-repeatable-delete"
+                                            title="حذف {{ child_group.group.label }}"
+                                            data-delete-label="{{ child_group.group.label }}"
+                                          >
+                                            حذف {{ child_group.group.label }}
+                                          </button>
+                                        {% endif %}
+                                      </td>
+                                    </tr>
+                                  {% endif %}
+                                {% endif %}
+                              </tbody>
+                            </table>
+                          </div>
+                        </section>
+
+                        {% for child_item in child_group.items %}
+                          {% with child_index=forloop.counter0 %}
+                            {% with child_index_str=child_index|stringformat:"s" %}
+                            {% with child_name_prefix=name_prefix|add:"_"|add:child_group.group.code|add:"_"|add:child_index_str %}
+                              {% include "operator_panel/_repeatable_child_groups.html" with group=child_group item=child_item item_index=child_index name_prefix=child_name_prefix %}
+                            {% endwith %}
+                          {% endwith %}
+                          {% endwith %}
+                        {% endfor %}
+                      {% else %}
+                      <section
+                        class="df-repeatable-group df-repeatable-child-group"
+                        data-repeatable-group="{{ child_group.group.code }}"
+                      >
+                        <div class="df-form-section-header">
+                          <div>
+                            <h4>{{ child_group.group.label }}</h4>
+                          </div>
+
+                          {% if edit_mode and not dynamic_form.is_submitted and child_group.can_add %}
+                            <button
+                              type="button"
+                              class="df-button df-button-secondary df-repeatable-add"
+                              data-group-code="{{ child_group.group.code }}"
+                            >
+                              + افزودن {{ child_group.group.label }}
+                            </button>
+                          {% endif %}
+                        </div>
+
+                        <input
+                          type="hidden"
+                          name="{{ name_prefix }}_{{ child_group.group.code }}__present"
+                          value="1"
+                          data-repeatable-presence
+                        />
+
+                        <div
+                          class="df-repeatable-items"
+                          data-group-code="{{ child_group.group.code }}"
+                        >
+                          {% for child_item in child_group.items %}
+                            {% with child_index=forloop.counter0 %}
+                              <div
+                                class="df-repeatable-item"
+                                data-repeatable-item
+                                {% if child_item.row_id %}data-row-id="{{ child_item.row_id }}"{% endif %}
+                              >
+                                {% if child_item.row_id %}
+                                  <input
+                                    type="hidden"
+                                    name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}__id"
+                                    value="{{ child_item.row_id }}"
+                                  />
+                                {% endif %}
+
+                                {% for child_field in child_item.fields %}
+                                          <label
+                                            class="df-accessible-label"
+                                            for="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                          >
+                                            {{ child_field.field.label }}
+                                          </label>
+                                  <div
+                                    class="df-form-field"
+                                    data-field-code="{{ child_field.field.code }}"
+                                  >
+                                    <label>
+                                      {{ child_field.field.label }}
+                                      {% if child_field.field.is_required %}<span>*</span>{% endif %}
+                                    </label>
+
+                                    {% if edit_mode and not dynamic_form.is_submitted and child_field.can_edit %}
+                                      {% if child_field.field.field_type == "TEXT" %}
+                                        <input
+                                          type="text"
+                                          id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          value="{{ child_field.value|default:'' }}"
+                                          step="{{ child_field.field.number_step }}"
+                                        />
+                                      {% elif child_field.field.field_type == "TEXTAREA" %}
+                                        <textarea
+                                          id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                        >{{ child_field.value|default:'' }}</textarea>
+                                      {% elif child_field.field.field_type == "NUMBER" %}
+                                        <input
+                                          type="number"
+                                          id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          value="{{ child_field.value|default:'' }}"
+                                          step="{{ child_field.field.number_step }}"
+                                        />
+                                      {% elif child_field.field.field_type == "DATE" %}
+                                        <input
+                                          type="{% if child_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if child_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %}
+                                          id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          value="{{ child_field.display_value|default:child_field.value|default:'' }}"
+                                        />
+                                      {% elif child_field.field.field_type == "DATETIME" %}
+                                        <input
+                                          type="{% if child_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if child_field.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %}
+                                          id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          value="{{ child_field.display_value|default:child_field.value|default:'' }}"
+                                        />
+                                      {% elif child_field.field.field_type == "BOOLEAN" %}
+                                        <input
+                                          type="checkbox"
+                                          id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                          {% if child_field.value %}checked{% endif %}
+                                        />
+                                      {% elif child_field.field.field_type == "SELECT" %}
+                                        <select
+                                          id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-{{ child_index }}-{{ child_field.field.code }}"
+                                                  name="{{ name_prefix }}_{{ child_group.group.code }}_{{ child_index }}_{{ child_field.field.code }}"
+                                        >
+                                          <option value="">---------</option>
+                                          {% for choice in child_field.choices %}
+                                            <option
+                                              value="{{ choice.value }}"
+                                              {% if child_field.value|stringformat:"s" == choice.value|stringformat:"s" %}selected{% endif %}
+                                            >
+                                              {{ choice.label }}
+                                            </option>
+                                          {% endfor %}
+                                        </select>
+                                      {% endif %}
+                                    {% else %}
+                                      {% if child_field.field.field_type == "BOOLEAN" %}
+                                        <input
+                                          type="checkbox"
+                                          {% if child_field.value %}checked{% endif %}
+                                          disabled
+                                        />
+                                      {% else %}
+                                        <div class="df-form-value">
+                                          {{ child_field.display_value|default:child_field.value|default:"—" }}
+                                        </div>
+                                      {% endif %}
+                                    {% endif %}
+                                  </div>
+                                {% endfor %}
+                              </div>
+                            {% endwith %}
+                          {% endfor %}
+
+                          {% if not child_group.items and edit_mode and not dynamic_form.is_submitted and child_group.can_add %}
+                            <div
+                              class="df-repeatable-item"
+                              data-repeatable-item
+                              data-repeatable-template
+                              style="display:none;"
+                            >
+                              {% for template_field in child_group.fields %}
+                                <div
+                                  class="df-form-field"
+                                  data-field-code="{{ template_field.field.code }}"
+                                >
+                                  <label>{{ template_field.field.label }}</label>
+                                  {% if template_field.field.field_type == "TEXT" %}
+                                    <input
+                                      type="text"
+                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                              step="{{ template_field.field.number_step }}"
+                                    />
+                                  {% elif template_field.field.field_type == "TEXTAREA" %}
+                                    <textarea
+                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    ></textarea>
+                                  {% elif template_field.field.field_type == "NUMBER" %}
+                                    <input
+                                      type="number"
+                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                      step="{{ template_field.field.number_step }}"
+                                    />
+                                  {% elif template_field.field.field_type == "DATE" %}
+                                    <input
+                                      type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}date{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-only-date{% endif %}
+                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    />
+                                  {% elif template_field.field.field_type == "DATETIME" %}
+                                    <input
+                                      type="{% if template_field.field.calendar == 'JALALI' %}text{% else %}datetime-local{% endif %}"{% if template_field.field.calendar == 'JALALI' %} data-jdp data-jdp-has-second="true"{% endif %}
+                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    />
+                                  {% elif template_field.field.field_type == "BOOLEAN" %}
+                                    <input
+                                      type="checkbox"
+                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    />
+                                  {% elif template_field.field.field_type == "SELECT" %}
+                                    <select
+                                      id="repeatable-{{ name_prefix }}-{{ child_group.group.code }}-TEMPLATE-{{ template_field.field.code }}"
+                                              name="{{ name_prefix }}_{{ child_group.group.code }}_TEMPLATE_{{ template_field.field.code }}"
+                                    >
+                                      <option value="">---------</option>
+                                    </select>
+                                  {% endif %}
+                                </div>
+                              {% endfor %}
+                            </div>
+                          {% endif %}
+                        </div>
+                      </section>
+
+                      {% for child_item in child_group.items %}
+                        {% with child_index=forloop.counter0 %}
+                          {% with child_index_str=child_index|stringformat:"s" %}
+                            {% with child_name_prefix=name_prefix|add:"_"|add:child_group.group.code|add:"_"|add:child_index_str %}
+                              {% include "operator_panel/_repeatable_child_groups.html" with group=child_group item=child_item item_index=child_index name_prefix=child_name_prefix %}
+                            {% endwith %}
+                          {% endwith %}
+                        {% endwith %}
+                      {% endfor %}
+                      {% endif %}
+
+                            {% endfor %}

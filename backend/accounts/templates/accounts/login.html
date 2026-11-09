@@ -1,0 +1,375 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#2563eb">
+    {% if system_branding.favicon %}
+        <link rel="icon" href="{{ system_branding.favicon.url }}">
+    {% else %}
+        <link rel="icon" type="image/svg+xml" href="{% static 'operator_panel/favicon.svg' %}">
+    {% endif %}
+    <title>ورود به سامانه | {{ system_branding.browser_title }}</title>
+    <style>
+        @font-face {
+            font-family: 'YekanBakh';
+            src: url("{% static 'operator_panel/fonts/YekanBakhFaNum-VF.woff2' %}") format("woff2-variations"),
+                 url("{% static 'operator_panel/fonts/YekanBakh-VF.woff2' %}") format("woff2-variations");
+            font-weight: 100 900;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        :root {
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --muted: #64748b;
+            --border: #e2e8f0;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --danger: #dc2626;
+            --danger-bg: #fef2f2;
+            --radius-card: 16px;
+            --radius-btn: 8px;
+            --shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.08);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'YekanBakh', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        html, body {
+            min-height: 100%;
+            height: 100%;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            line-height: 1.7;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .login-shell {
+            width: min(880px, 100%);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-card);
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
+
+        .brand-panel {
+            background: linear-gradient(145deg, #1e293b 0%, #0f172a 100%);
+            color: #ffffff;
+            padding: 48px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .brand-panel::before {
+            content: "";
+            position: absolute;
+            width: 280px;
+            height: 280px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(37, 99, 235, 0.25) 0%, transparent 70%);
+            top: -60px;
+            left: -60px;
+            pointer-events: none;
+        }
+
+        .brand-header {
+            position: relative;
+            z-index: 1;
+        }
+
+        .brand-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #93c5fd;
+            font-size: 11px;
+            font-weight: 500;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .brand-logo-symbol {
+            width: 48px;
+            height: 48px;
+            border-radius: 10px;
+            background: #2563eb;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }
+
+        .brand-name {
+            font-size: 22px;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: -0.5px;
+            margin-bottom: 8px;
+        }
+
+        .brand-tagline {
+            font-size: 13px;
+            color: #94a3b8;
+            font-weight: 400;
+            line-height: 1.6;
+        }
+
+        .brand-footer {
+            position: relative;
+            z-index: 1;
+            padding-top: 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .form-panel {
+            padding: 48px 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            background: #ffffff;
+        }
+
+        .form-header {
+            margin-bottom: 28px;
+        }
+
+        .form-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+
+        .form-subtitle {
+            font-size: 12px;
+            color: #64748b;
+            font-weight: 400;
+        }
+
+        .field {
+            margin-bottom: 18px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            color: #334155;
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            width: 100%;
+            height: 42px;
+            padding: 0 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-btn);
+            outline: none;
+            background: #f8fafc;
+            color: var(--text);
+            font-size: 13px;
+            transition: all 0.15s ease;
+        }
+
+        input:focus {
+            background: #ffffff;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .form-errors,
+        ul.errorlist {
+            margin-bottom: 16px;
+            padding: 10px 14px;
+            border-radius: var(--radius-btn);
+            background: var(--danger-bg);
+            color: var(--danger);
+            font-size: 12px;
+            border: 1px solid #fecaca;
+            list-style: none;
+        }
+
+        .actions {
+            margin-top: 24px;
+        }
+
+        button.login-submit {
+            width: 100%;
+            height: 42px;
+            border: 0;
+            border-radius: var(--radius-btn);
+            cursor: pointer;
+            color: #ffffff;
+            background: var(--primary);
+            font-size: 13px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            transition: background 0.15s ease;
+        }
+
+        button.login-submit:hover {
+            background: var(--primary-hover);
+        }
+
+        button.login-submit:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .login-spinner {
+            display: none;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: spin 0.75s linear infinite;
+        }
+
+        .login-submit.is-loading .login-spinner {
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .footer-note {
+            margin-top: 24px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 11px;
+        }
+
+        @media (max-width: 720px) {
+            .login-shell {
+                grid-template-columns: 1fr;
+            }
+            .brand-panel {
+                padding: 32px 24px;
+            }
+            .form-panel {
+                padding: 32px 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main class="login-shell">
+        <section class="brand-panel">
+            <div class="brand-header">
+                <div class="brand-badge">سامانه سازمانی</div>
+                <div class="brand-logo-symbol">
+                    {{ system_branding.sidebar_symbol|default:"D" }}
+                </div>
+                <h2 class="brand-name">{{ system_branding.system_name|default:"Dolphin Flow" }}</h2>
+                <p class="brand-tagline">
+                    پورتال کارتابل و پیشبرد فرآیندهای عملیاتی سازمانی
+                </p>
+            </div>
+            <div class="brand-footer">
+                نسخه ۲.۴ پایدار و ایمن · کلیه حقوق محفوظ است
+            </div>
+        </section>
+
+        <section class="form-panel">
+            <div class="form-header">
+                <h1 class="form-title">ورود به حساب کاربری</h1>
+                <p class="form-subtitle">برای دسترسی به کارتابل و وظایف، اطلاعات خود را وارد نمایید.</p>
+            </div>
+
+            {% if form.non_field_errors %}
+                <div class="form-errors">{{ form.non_field_errors }}</div>
+            {% endif %}
+
+            <form method="post" novalidate>
+                {% csrf_token %}
+
+                <div class="field">
+                    <label for="{{ form.username.id_for_label }}">نام کاربری</label>
+                    {{ form.username }}
+                    {% if form.username.errors %}
+                        <div class="form-errors">{{ form.username.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="field">
+                    <label for="{{ form.password.id_for_label }}">کلمه عبور</label>
+                    {{ form.password }}
+                    {% if form.password.errors %}
+                        <div class="form-errors">{{ form.password.errors }}</div>
+                    {% endif %}
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="login-submit" aria-live="polite">
+                        <span class="login-spinner" aria-hidden="true"></span>
+                        <span class="login-submit-label">ورود به سامانه</span>
+                    </button>
+                </div>
+            </form>
+
+            <div class="footer-note">
+                پشتیبانی فنی: واحد فناوری اطلاعات و ارتباطات
+            </div>
+        </section>
+    </main>
+
+    <script>
+        (() => {
+            const form = document.querySelector(".form-panel form");
+            const button = form && form.querySelector(".login-submit");
+            const label = button && button.querySelector(".login-submit-label");
+
+            if (!form || !button || !label) return;
+
+            let submitting = false;
+            form.addEventListener("submit", (event) => {
+                if (submitting) {
+                    event.preventDefault();
+                    return;
+                }
+                submitting = true;
+                button.disabled = true;
+                button.classList.add("is-loading");
+                label.textContent = "در حال ورود...";
+            });
+        })();
+    </script>
+</body>
+</html>

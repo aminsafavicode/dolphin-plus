@@ -1,0 +1,222 @@
+document.addEventListener("DOMContentLoaded", () => {
+    const form = document.querySelector("form[data-instance-id]");
+    if (!form) return;
+
+    const instanceId = form.dataset.instanceId;
+    const actionUrl = new URL(form.getAttribute("action") || form.action, window.location.origin);
+    actionUrl.pathname = actionUrl.pathname.replace(/\/$/, "") + "/formula-definitions/";
+    const endpoint = actionUrl.toString();
+
+    const state = {
+        fieldsById: new Map(),
+        formulasById: new Map(),
+        formulaResultsById: new Map(),
+        suppressFormulaObserver: false,
+        loading: false,
+    };
+
+    function toNumber(value) {
+        if (value === null || value === undefined || value === "") return NaN;
+        if (typeof value === "number") return value;
+        const normalized = String(value)
+            .trim()
+            .replace(/,/g, "")
+            .replace(/[۰-۹]/g, digit => String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)));
+        const number = Number(normalized);
+        return Number.isFinite(number) ? number : NaN;
+    }
+
+    function formatNumber(value, decimalPlaces) {
+        const places = Math.max(0, Math.min(Number(decimalPlaces) || 0, 6));
+        if (!Number.isFinite(value)) return "";
+        return value.toLocaleString("en-US", { minimumFractionDigits: places, maximumFractionDigits: places, useGrouping: false });
+    }
+
+    function getNormalFieldContainers() {
+        return Array.from(form.querySelectorAll(".df-form-field[data-field-code]"));
+    }
+
+    function getNormalFormulaContainer(formula) {
+        const containers = getNormalFieldContainers();
+
+        for (const field of containers) {
+            if (field.dataset.fieldCode === formula.code) return field;
+        }
+
+        const expectedIndex = Number(formula.dom_index);
+        if (Number.isInteger(expectedIndex) && expectedIndex >= 0) {
+            return containers[expectedIndex] || null;
+        }
+
+        return null;
+    }
+
+    function setNormalFormulaValue(formula, value) {
+        const container = getNormalFormulaContainer(formula);
+        if (!container) return;
+        let output = container.querySelector(".df-formula-value");
+        if (!output) {
+            output = document.createElement("div");
+            output.className = "df-form-value df-formula-value";
+            const fallback = container.querySelector(".df-form-value");
+            if (fallback) fallback.replaceWith(output);
+            else container.appendChild(output);
+        }
+        output.textContent = formatNumber(value, formula.decimal_places);
+    }
+
+    function setRowFormulaValue(formula, row, value) {
+        const cells = Array.from(row.querySelectorAll("[data-column-group][data-field-code]"));
+        const cell = cells.find(
+            candidate =>
+                candidate.dataset.columnGroup === formula.group_code &&
+                candidate.dataset.fieldCode === formula.code
+        );
+        if (!cell) return;
+
+        let output = cell.querySelector(".df-formula-value");
+        if (!output) {
+            output = document.createElement("div");
+            output.className = "df-table-value df-formula-value";
+            cell.replaceChildren(output);
+        }
+        output.textContent = formatNumber(value, formula.decimal_places);
+    }
+
+    function findRenderedRowById(rowId) {
+        if (rowId === null || rowId === undefined || rowId === "") return null;
+        const wanted = String(rowId);
+        const rows = form.querySelectorAll(
+            "[data-repeatable-item]:not([data-repeatable-template])"
+        );
+        for (const row of rows) {
+            if (row.dataset.rowId === wanted) return row;
+            const idInputs = row.querySelectorAll(
+                'input[data-repeatable-row-id], input[data-repeatable-root-row-id]'
+            );
+            for (const input of idInputs) {
+                if (String(input.value) === wanted) return row;
+            }
+        }
+        return null;
+    }
+
+    function isEditMode() {
+        return form.dataset.editMode === "1";
+    }
+
+    function applyServerResults() {
+        state.suppressFormulaObserver = true;
+        for (const formula of state.formulasById.values()) {
+            if (formula.calculation_only) continue;
+            const result = state.formulaResultsById.get(Number(formula.field_id));
+            if (!result) continue;
+            if (formula.scope === "FORM") {
+                setNormalFormulaValue(formula, toNumber(result.value));
+                continue;
+            }
+            const values = Array.isArray(result.values) ? result.values : [];
+            const rowIds = Array.isArray(result.row_ids) ? result.row_ids : [];
+
+            values.forEach((value, index) => {
+                const row = findRenderedRowById(rowIds[index]);
+                if (!row) return;
+
+                setRowFormulaValue(formula, row, toNumber(value));
+
+                if (!row.querySelector("[data-column-group][data-field-code]")) {
+                    let output = row.querySelector(
+                        '.df-formula-value[data-formula-id="' + formula.field_id + '"]'
+                    );
+                    if (!output) {
+                        output = document.createElement("div");
+                        output.className = "df-form-value df-formula-value";
+                        output.dataset.formulaId = String(formula.field_id);
+                        row.appendChild(output);
+                    }
+                    output.textContent =
+                        formula.label + ": " +
+                        formatNumber(toNumber(value), formula.decimal_places);
+                }
+            });
+        }
+        window.setTimeout(() => {
+            state.suppressFormulaObserver = false;
+        }, 0);
+    }
+
+    async function recalculate() {
+        if (!isEditMode() || state.loading) return;
+        state.loading = true;
+        try {
+            const formData = new FormData(form);
+            const response = await fetch(`${endpoint}?instance_id=${encodeURIComponent(instanceId)}`, {
+                method: "POST",
+                body: formData,
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest",
+                    "X-CSRFToken": getCsrfToken(),
+                },
+            });
+            if (!response.ok) return;
+            const payload = await response.json();
+            state.formulaResultsById.clear();
+            for (const [fieldId, result] of Object.entries(payload.formula_results || {})) {
+                state.formulaResultsById.set(Number(fieldId), result);
+            }
+            applyServerResults();
+        } catch (error) {
+            console.warn("Formula calculation could not be loaded:", error);
+        } finally {
+            state.loading = false;
+        }
+    }
+
+    function getCsrfToken() {
+        const input = form.querySelector('input[name="csrfmiddlewaretoken"]');
+        if (input && input.value) return input.value;
+        const match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : "";
+    }
+
+    async function loadDefinitions() {
+        if (state.loading) return;
+        state.loading = true;
+        try {
+            const response = await fetch(`${endpoint}?instance_id=${encodeURIComponent(instanceId)}`, {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+            });
+            if (!response.ok) return;
+            const payload = await response.json();
+            state.fieldsById.clear();
+            state.formulasById.clear();
+            state.formulaResultsById.clear();
+            for (const field of payload.fields || []) state.fieldsById.set(Number(field.id), field);
+            for (const formula of payload.formulas || []) state.formulasById.set(Number(formula.field_id), formula);
+            for (const [fieldId, result] of Object.entries(payload.formula_results || {})) {
+                state.formulaResultsById.set(Number(fieldId), result);
+            }
+            applyServerResults();
+        } catch (error) {
+            console.warn("Formula definitions could not be loaded:", error);
+        } finally {
+            state.loading = false;
+        }
+    }
+
+    let recalcTimer = null;
+    function scheduleRecalculate() {
+        window.clearTimeout(recalcTimer);
+        recalcTimer = window.setTimeout(recalculate, 0);
+    }
+
+    form.addEventListener("input", scheduleRecalculate);
+    form.addEventListener("change", scheduleRecalculate);
+
+    const observer = new MutationObserver(() => {
+        if (!state.suppressFormulaObserver) scheduleRecalculate();
+    });
+    observer.observe(form, { childList: true, subtree: true });
+
+    loadDefinitions();
+});

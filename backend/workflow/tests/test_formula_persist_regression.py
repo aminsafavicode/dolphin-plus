@@ -1,0 +1,1790 @@
+"""
+Regression tests for Formula persistence across the real dynamic-form save path.
+
+Scenario under test (mirrors the live repair form configuration):
+
+    repeatable NORMAL group ``cunspartTable``
+        quantity   NUMBER
+        UnitPrice  NUMBER
+        TotalPrice FORMULA = quantity * UnitPrice   (decimal_places=0)
+
+    top-level FORMULA field ``FinalPriceRepair``
+        FinalPriceRepair = SUM(cunspartTable.TotalPrice)  (decimal_places=2)
+
+The browser submits every row including the calculated ``TotalPrice`` and
+``FinalPriceRepair`` values.  The server must:
+
+  * ignore the client-supplied formula values (never authoritative),
+  * derive formula values server-side from the raw inputs,
+  * persist the derived values into ``FormData.data``,
+  * render the derived values again on read-only and edit GET.
+
+The tests drive the current FormDraftSaveService save path and calculate
+Formula values through the backend FormulaService rather than expecting
+formula values to be persisted in FormData/RepeatableRowValue.
+"""
+import json
+
+from django.contrib.auth import get_user_model
+from django.test import TestCase
+from decimal import Decimal
+
+from workflow.form_services import DynamicFormService
+from workflow.form_draft_save_services import FormDraftSaveService
+from workflow.repeatable_row_read_services import RepeatableRowReadService
+from workflow.formula_bootstrap import bootstrap_formula_system, _build_context_data
+from workflow.formula_services import FormulaService
+from operator_panel.formula_views import formula_definitions
+from workflow.history_models import HistoryConfiguration, HistoryField
+from workflow.history_services import HistoryService
+from workflow.models import (
+    FieldAccess,
+    FormData,
+    FormDefinition,
+    FormField,
+    FormRepeatableGroup,
+    FormSection,
+    RepeatableGroupAccess,
+    RepeatableRow,
+    RepeatableRowValue,
+    Workflow,
+    WorkflowInstance,
+    WorkflowMembership,
+    WorkflowStep,
+    WorkflowStepExecution,
+)
+
+User = get_user_model()
+
+
+def formula_config(*, tokens, decimal_places=2):
+    return json.dumps({
+        "version": 2,
+        "decimal_places": decimal_places,
+        "tokens": tokens,
+    })
+
+
+class FormulaPersistenceTestCase(TestCase):
+
+    @classmethod
+    def setUpTestData(cls):
+        bootstrap_formula_system()
+
+        cls.user = User.objects.create_user(username="formula_user", password="p")
+
+        cls.workflow = Workflow.objects.create(
+            name="Repair",
+            code="REPAIR_FORMULA",
+            is_active=True,
+        )
+        cls.step = WorkflowStep.objects.create(
+            workflow=cls.workflow,
+            name="Step 1",
+            code="STEP1",
+            order=1,
+            is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=cls.workflow,
+            user=cls.user,
+            role=WorkflowMembership.Role.EXECUTOR,
+            is_active=True,
+        )
+        cls.form = FormDefinition.objects.create(
+            workflow=cls.workflow,
+            name="Repair Form",
+            is_active=True,
+        )
+        cls.section = FormSection.objects.create(
+            form=cls.form,
+            name="Repair Table",
+            code="REPAIR_TABLE",
+            order=1,
+            is_active=True,
+        )
+        cls.final_section = FormSection.objects.create(
+            form=cls.form,
+            name="Final",
+            code="FINAL",
+            order=2,
+            is_active=True,
+        )
+
+        # A plain normal field that must be unaffected by formula logic.
+        cls.note_field = FormField.objects.create(
+            section=cls.final_section,
+            name="Note",
+            code="note",
+            field_type=FormField.FieldType.TEXT,
+            label="یادداشت",
+            order=0,
+            is_active=True,
+        )
+
+        cls.group = FormRepeatableGroup.objects.create(
+            section=cls.section,
+            name="cunspartTable",
+            code="cunspartTable",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=0,
+            is_active=True,
+        )
+        cls.qty = FormField.objects.create(
+            section=cls.section, repeatable_group=cls.group,
+            name="quantity", code="quantity",
+            field_type=FormField.FieldType.NUMBER,
+            label="تعداد", order=0, is_active=True,
+        )
+        cls.price = FormField.objects.create(
+            section=cls.section, repeatable_group=cls.group,
+            name="UnitPrice", code="UnitPrice",
+            field_type=FormField.FieldType.NUMBER,
+            label="قیمت واحد", order=1, is_active=True,
+        )
+        cls.total = FormField.objects.create(
+            section=cls.section, repeatable_group=cls.group,
+            name="TotalPrice", code="TotalPrice",
+            field_type=FormulaService.FIELD_TYPE,
+            label="قیمت کل", order=2, is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "field", "field_id": cls.qty.pk},
+                {"type": "operator", "value": "*"},
+                {"type": "field", "field_id": cls.price.pk},
+            ], decimal_places=0),
+        )
+        cls.final = FormField.objects.create(
+            section=cls.final_section,
+            name="FinalPriceRepair", code="FinalPriceRepair",
+            field_type=FormulaService.FIELD_TYPE,
+            label="قیمت نهایی", order=1, is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": cls.total.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
+        for field, edit in (
+            (cls.note_field, True),
+            (cls.qty, True),
+            (cls.price, True),
+            (cls.total, False),
+            (cls.final, False),
+        ):
+            FieldAccess.objects.create(
+                field=field,
+                step=cls.step,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=edit,
+            )
+        RepeatableGroupAccess.objects.create(
+            group=cls.group,
+            step=cls.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+
+    def make_instance(self):
+        instance = WorkflowInstance.objects.create(
+            workflow=self.workflow,
+            current_step=self.step,
+            status=WorkflowInstance.Status.ACTIVE,
+            started_by=self.user,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance,
+            workflow_step=self.step,
+            performed_by=self.user,
+        )
+        return instance
+
+    def post_payload(self, rows, note="", include_formula_values=True):
+        """Build the current normalized repeatable-group payload."""
+        items = []
+        for row in rows:
+            item = {}
+            if row.get("_id"):
+                item["row_id"] = int(row["_id"])
+            for code in ("quantity", "UnitPrice"):
+                item[code] = row.get(code, "")
+            # Formula fields are intentionally omitted: they are derived
+            # values and are never part of the editable save contract.
+            items.append(item)
+
+        data = {"cunspartTable": items}
+        if note is not None:
+            data["note"] = note
+        return data
+
+    def save_draft(
+        self,
+        *,
+        instance,
+        submitted_data,
+        user=None,
+        edit_mode=True,
+    ):
+        return FormDraftSaveService.save(
+            instance=instance,
+            step=self.step,
+            user=user or self.user,
+            submitted_data=submitted_data,
+            edit_mode=edit_mode,
+        )
+
+    def save_rows(self, rows, note=""):
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            submitted_data=self.post_payload(rows, note=note),
+        )
+        return instance
+
+    def persisted_rows(self, instance):
+        """Return the current backend-calculated form state."""
+        form_data = FormData.objects.filter(instance=instance).first()
+        data = dict(form_data.data) if form_data and isinstance(form_data.data, dict) else {}
+        group_data = RepeatableRowReadService.reconstruct_instance(instance=instance)
+        for group in group_data["groups"]:
+            data[group["code"]] = [
+                {
+                    "_id": str(item["row_id"]),
+                    **{
+                        field["code"]: field["value"]
+                        for field in item["fields"]
+                    },
+                }
+                for item in group["items"]
+            ]
+
+        calculated = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        # Reconstruction returns Decimal values for NUMBER fields; the
+        # regression contract compares the form's transport representation.
+        for group in calculated.values():
+            if not isinstance(group, list):
+                continue
+            for row in group:
+                if not isinstance(row, dict):
+                    continue
+                for code, value in list(row.items()):
+                    if isinstance(value, Decimal):
+                        text_value = format(value, "f").rstrip("0").rstrip(".")
+                        row[code] = text_value or "0"
+
+        return calculated
+
+    # --------------------------------------------------------------
+    # Main regression: the reported scenario survives the real save
+    # --------------------------------------------------------------
+
+    def test_first_save_persists_server_derived_formula_values(self):
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+            {"quantity": "50", "UnitPrice": "50", "TotalPrice": "2500"},
+            {"quantity": "10", "UnitPrice": "1000", "TotalPrice": "10000"},
+        ])
+        data = self.persisted_rows(instance)
+        rows = data["cunspartTable"]
+        self.assertEqual([r["quantity"] for r in rows], ["10", "50", "10"])
+        self.assertEqual([r["UnitPrice"] for r in rows], ["500", "50", "1000"])
+        self.assertEqual(
+            [r["TotalPrice"] for r in rows],
+            ["5000", "2500", "10000"],
+        )
+        self.assertEqual(data["FinalPriceRepair"], "17500.00")
+
+    def test_client_supplied_formula_values_are_never_authoritative(self):
+        # Tampered formula values must be replaced by server derivation.
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "99999"},
+            {"quantity": "50", "UnitPrice": "50", "TotalPrice": "99999"},
+        ])
+        rows = self.persisted_rows(instance)["cunspartTable"]
+        self.assertEqual([r["TotalPrice"] for r in rows], ["5000", "2500"])
+        self.assertEqual(
+            self.persisted_rows(instance)["FinalPriceRepair"],
+            "7500.00",
+        )
+
+    def test_formula_values_survive_when_not_submitted_in_payload(self):
+        # Simulate a client that omits formula values entirely.
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload(
+                [
+                    {"quantity": "4", "UnitPrice": "2000", "TotalPrice": ""},
+                    {"quantity": "2", "UnitPrice": "100", "TotalPrice": ""},
+                ],
+                include_formula_values=False,
+            ),
+            edit_mode=True,
+        )
+        rows = self.persisted_rows(instance)["cunspartTable"]
+        self.assertEqual([r["TotalPrice"] for r in rows], ["8000", "200"])
+        self.assertEqual(self.persisted_rows(instance)["FinalPriceRepair"], "8200.00")
+
+
+    def test_build_context_data_reconstructs_grandchild_repeatable_rows(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="Child Items",
+            code="formula_children",
+            order=1,
+            is_active=True,
+        )
+        grandchild_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=child_group,
+            name="Grandchild Items",
+            code="formula_grandchildren",
+            order=2,
+            is_active=True,
+        )
+        amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=grandchild_group,
+            name="Amount",
+            code="amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="Amount",
+            order=0,
+            is_active=True,
+        )
+
+        for group in (child_group, grandchild_group):
+            RepeatableGroupAccess.objects.create(
+                group=group,
+                step=self.step,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=True,
+                can_add=True,
+                can_delete=True,
+            )
+        FieldAccess.objects.create(
+            field=amount,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+
+        instance = self.make_instance()
+        parent_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=parent_row,
+            row_order=0,
+        )
+        grandchild_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=grandchild_group,
+            parent_row=child_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=grandchild_row,
+            field=amount,
+            decimal_value=Decimal("125"),
+        )
+
+        context = _build_context_data(
+            instance=instance,
+            submitted_data=None,
+        )
+
+        self.assertIn("cunspartTable", context)
+        root = context["cunspartTable"][0]
+        self.assertIn("child_groups", root)
+        child = next(
+            item
+            for item in root["child_groups"]
+            if item["code"] == "formula_children"
+        )
+        grandchild = next(
+            item
+            for item in child["items"][0]["child_groups"]
+            if item["code"] == "formula_grandchildren"
+        )
+        self.assertEqual(
+            grandchild["items"][0]["amount"],
+            Decimal("125"),
+        )
+
+    def test_nested_parent_formula_aggregate_resolves_descendant_formula(self):
+        """A parent aggregate must evaluate a child formula through descendant scope."""
+        parent_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="nestedFormulaParent",
+            code="nestedFormulaParent",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=20,
+            is_active=True,
+        )
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=parent_group,
+            name="nestedFormulaChild",
+            code="nestedFormulaChild",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=21,
+            is_active=True,
+        )
+        base = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedBase",
+            code="nestedBase",
+            field_type=FormField.FieldType.NUMBER,
+            label="Nested base",
+            order=0,
+            is_active=True,
+        )
+        extra = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedExtra",
+            code="nestedExtra",
+            field_type=FormField.FieldType.NUMBER,
+            label="Nested extra",
+            order=1,
+            is_active=True,
+        )
+        child_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedChildTotal",
+            code="nestedChildTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Nested child total",
+            order=2,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "field", "field_id": base.pk},
+                {"type": "operator", "value": "+"},
+                {"type": "field", "field_id": extra.pk},
+            ], decimal_places=0),
+        )
+        parent_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parent_group,
+            name="nestedParentTotal",
+            code="nestedParentTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Nested parent total",
+            order=0,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": child_total.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+        instance_data = {
+            parent_group.code: [
+                {
+                    "child_groups": [{
+                        "code": child_group.code,
+                        "items": [
+                            {base.code: "10", extra.code: "5"},
+                            {base.code: "20", extra.code: "7"},
+                        ],
+                    }],
+                },
+            ],
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=instance_data,
+        )
+
+        self.assertEqual(
+            result[parent_group.code][0][parent_total.code],
+            "42",
+        )
+
+    def test_device_formula_aggregates_only_its_own_child_rows(self):
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="devicesForFormula",
+            code="devicesForFormula",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=20,
+            is_active=True,
+        )
+        parts_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=device_group,
+            name="devicePartsForFormula",
+            code="devicePartsForFormula",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=21,
+            is_active=True,
+        )
+        amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parts_group,
+            name="partAmount",
+            code="partAmount",
+            field_type=FormField.FieldType.NUMBER,
+            label="Part amount",
+            order=0,
+            is_active=True,
+        )
+        parts_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="devicePartsTotal",
+            code="devicePartsTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Device parts total",
+            order=0,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": amount.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+
+        data = {
+            device_group.code: [
+                {
+                    "child_groups": [{
+                        "code": parts_group.code,
+                        "items": [
+                            {"partAmount": "100"},
+                            {"partAmount": "200"},
+                        ],
+                    }],
+                },
+                {
+                    "child_groups": [{
+                        "code": parts_group.code,
+                        "items": [
+                            {"partAmount": "400"},
+                            {"partAmount": "600"},
+                        ],
+                    }],
+                },
+            ],
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        self.assertEqual(
+            [row[parts_total.code] for row in result[device_group.code]],
+            ["300", "1000"],
+        )
+
+    def test_device_formula_ui_result_maps_each_device_value_to_its_row_id(self):
+        """Mirror the Flat TABLE contract: each DEVICE result has its own stable row id."""
+        device_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            name="uiDevicesForFormula",
+            code="uiDevicesForFormula",
+            group_type=FormRepeatableGroup.GroupType.DEVICE,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=30,
+            is_active=True,
+        )
+        parts_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=device_group,
+            name="uiDevicePartsForFormula",
+            code="uiDevicePartsForFormula",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=31,
+            is_active=True,
+        )
+        amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=parts_group,
+            name="uiPartAmount",
+            code="uiPartAmount",
+            field_type=FormField.FieldType.NUMBER,
+            label="UI part amount",
+            order=0,
+            is_active=True,
+        )
+        total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=device_group,
+            name="uiDeviceTotal",
+            code="uiDeviceTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="UI device total",
+            order=1,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": amount.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+        for field in (amount, total):
+            FieldAccess.objects.create(
+                field=field,
+                step=self.step,
+                role=WorkflowMembership.Role.EXECUTOR,
+                can_view=True,
+                can_edit=field == amount,
+            )
+        RepeatableGroupAccess.objects.create(
+            group=device_group,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        RepeatableGroupAccess.objects.create(
+            group=parts_group,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+
+        instance = self.make_instance()
+        devices = [
+            RepeatableRow.objects.create(instance=instance, group=device_group, row_order=0),
+            RepeatableRow.objects.create(instance=instance, group=device_group, row_order=1),
+        ]
+        for device, values in zip(devices, ((100, 200), (400, 600))):
+            for order, value in enumerate(values):
+                child = RepeatableRow.objects.create(
+                    instance=instance,
+                    group=parts_group,
+                    parent_row=device,
+                    row_order=order,
+                )
+                RepeatableRowValue.objects.create(
+                    row=child,
+                    field=amount,
+                    decimal_value=Decimal(value),
+                )
+
+        from django.test import RequestFactory
+        request = RequestFactory().get(
+            f"/operator/workflow/{instance.pk}/formula-definitions/"
+        )
+        request.user = self.user
+        response = formula_definitions(request, instance.pk)
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        result = payload["formula_results"][str(total.pk)]
+        self.assertEqual(result["group_code"], device_group.code)
+        self.assertEqual(result["values"], ["300", "1000"])
+        self.assertEqual(
+            result["row_ids"],
+            [str(devices[0].pk), str(devices[1].pk)],
+        )
+        self.assertEqual(len(result["values"]), len(result["row_ids"]))
+
+    def test_same_group_aggregate_remains_global_for_repeatable_rows(self):
+        same_group_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="sameGroupTotal",
+            code="sameGroupTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Same group total",
+            order=20,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": self.qty.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+
+        data = {
+            self.group.code: [
+                {"quantity": "10", "UnitPrice": "100"},
+                {"quantity": "20", "UnitPrice": "200"},
+                {"quantity": "30", "UnitPrice": "300"},
+            ],
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        self.assertEqual(
+            [row[same_group_total.code] for row in result[self.group.code]],
+            ["60", "60", "60"],
+        )
+
+    def test_top_level_aggregate_traverses_nested_repeatable_group(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="nestedTable",
+            code="nestedTable",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=1,
+            is_active=True,
+        )
+        child_value = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedValue",
+            code="nestedValue",
+            field_type=FormField.FieldType.NUMBER,
+            label="Nested value",
+            order=0,
+            is_active=True,
+        )
+        nested_total = FormField.objects.create(
+            section=self.final_section,
+            name="NestedTotal",
+            code="NestedTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Nested total",
+            order=2,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": child_value.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
+        data = {
+            self.group.code: [
+                {
+                    "child_groups": [
+                        {
+                            "code": child_group.code,
+                            "items": [
+                                {"nestedValue": "1"},
+                                {"nestedValue": "1"},
+                            ],
+                        }
+                    ]
+                },
+                {
+                    "child_groups": [
+                        {
+                            "code": child_group.code,
+                            "items": [
+                                {"nestedValue": "1"},
+                            ],
+                        }
+                    ]
+                },
+            ]
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        self.assertEqual(result[nested_total.code], "3.00")
+
+    def test_parent_scoped_aggregate_is_dynamic_per_parent_and_preserves_global_aggregate(self):
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="scopedParts",
+            code="scopedParts",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=10,
+            is_active=True,
+        )
+        amount = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="amount",
+            code="amount",
+            field_type=FormField.FieldType.NUMBER,
+            label="Amount",
+            order=0,
+            is_active=True,
+        )
+        parent_total = FormField.objects.create(
+            section=self.section,
+            repeatable_group=self.group,
+            name="partsTotal",
+            code="partsTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Parts total",
+            order=10,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": amount.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+        grand_total = FormField.objects.create(
+            section=self.final_section,
+            name="AllPartsTotal",
+            code="AllPartsTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="All parts total",
+            order=10,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": amount.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=0),
+        )
+
+        data = {
+            self.group.code: [
+                {
+                    "child_groups": [{
+                        "code": child_group.code,
+                        "items": [
+                            {"amount": "10"},
+                            {"amount": "20"},
+                            {"amount": "30"},
+                        ],
+                    }],
+                },
+                {
+                    "child_groups": [{
+                        "code": child_group.code,
+                        "items": [
+                            {"amount": "100"},
+                            {"amount": "200"},
+                        ],
+                    }],
+                },
+            ],
+        }
+
+        result = FormulaService.calculate_context_data(
+            form=self.form,
+            data=data,
+        )
+
+        self.assertEqual(result[self.group.code][0]["partsTotal"], "60")
+        self.assertEqual(result[self.group.code][1]["partsTotal"], "300")
+        self.assertEqual(result[grand_total.code], "360")
+
+    def test_formula_definitions_merges_posted_nested_repeatable_values(self):
+        from django.urls import reverse
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="nestedLiveTable",
+            code="nestedLiveTable",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=2,
+            is_active=True,
+        )
+        child_value = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="nestedLiveValue",
+            code="nestedLiveValue",
+            field_type=FormField.FieldType.NUMBER,
+            label="Nested live value",
+            order=0,
+            is_active=True,
+        )
+        live_total = FormField.objects.create(
+            section=self.final_section,
+            name="NestedLiveTotal",
+            code="NestedLiveTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Nested live total",
+            order=3,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": child_value.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
+        RepeatableGroupAccess.objects.create(
+            group=child_group,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+            can_add=True,
+            can_delete=True,
+        )
+        FieldAccess.objects.create(
+            field=child_value,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=True,
+        )
+        FieldAccess.objects.create(
+            field=live_total,
+            step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True,
+            can_edit=False,
+        )
+
+        instance = self.make_instance()
+        root_rows = [
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=self.group,
+                row_order=index,
+            )
+            for index in range(2)
+        ]
+        child_rows = [
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=root_rows[0],
+                row_order=0,
+            ),
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=root_rows[0],
+                row_order=1,
+            ),
+            RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=root_rows[1],
+                row_order=0,
+            ),
+        ]
+        for row, value in zip(child_rows, ("1", "1", "1")):
+            RepeatableRowValue.objects.create(
+                row=row,
+                field=child_value,
+                decimal_value=Decimal(value),
+            )
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("operator_panel:formula_definitions", args=[instance.pk]),
+            {
+                f"{self.group.code}_0__id": str(root_rows[0].pk),
+                f"{self.group.code}_0_{child_group.code}_0__id": str(child_rows[0].pk),
+                f"{self.group.code}_0_{child_group.code}_0_{child_value.code}": "2",
+                f"{self.group.code}_0_{child_group.code}_1__id": str(child_rows[1].pk),
+                f"{self.group.code}_0_{child_group.code}_1_{child_value.code}": "3",
+                f"{self.group.code}_1__id": str(root_rows[1].pk),
+                f"{self.group.code}_1_{child_group.code}_0__id": str(child_rows[2].pk),
+                f"{self.group.code}_1_{child_group.code}_0_{child_value.code}": "4",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["formula_results"][str(live_total.pk)]["value"],
+            "9.00",
+        )
+
+    # --------------------------------------------------------------
+    # Second save / edit semantics (previous_item matters)
+    # --------------------------------------------------------------
+
+    def test_second_save_after_editing_quantity_updates_formulas(self):
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload(
+                [
+                    {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+                    {"quantity": "50", "UnitPrice": "50", "TotalPrice": "2500"},
+                ],
+            ),
+            edit_mode=True,
+        )
+        rows = self.persisted_rows(instance)["cunspartTable"]
+        row_ids = [r["_id"] for r in rows]
+
+        # Second save: keep both rows, edit quantity of row 1 (10 -> 20),
+        # change UnitPrice of row 2 (50 -> 60).
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload([
+                {"_id": row_ids[0], "quantity": "20", "UnitPrice": "500", "TotalPrice": "10000"},
+                {"_id": row_ids[1], "quantity": "50", "UnitPrice": "60", "TotalPrice": "3000"},
+            ]),
+            edit_mode=True,
+        )
+        data = self.persisted_rows(instance)
+        self.assertEqual(data["cunspartTable"][0]["_id"], row_ids[0])
+        self.assertEqual(data["cunspartTable"][1]["_id"], row_ids[1])
+        self.assertEqual([r["TotalPrice"] for r in data["cunspartTable"]], ["10000", "3000"])
+        self.assertEqual(data["FinalPriceRepair"], "13000.00")
+
+    def test_second_save_editing_only_quantity(self):
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload(
+                [
+                    {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+                    {"quantity": "3", "UnitPrice": "200", "TotalPrice": "600"},
+                ],
+            ),
+            edit_mode=True,
+        )
+        ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
+        # Change only the quantity of the first row.
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload([
+                {"_id": ids[0], "quantity": "7", "UnitPrice": "500", "TotalPrice": "3500"},
+                {"_id": ids[1], "quantity": "3", "UnitPrice": "200", "TotalPrice": "600"},
+            ]),
+            edit_mode=True,
+        )
+        data = self.persisted_rows(instance)
+        rows = data["cunspartTable"]
+        self.assertEqual(rows[0]["quantity"], "7")
+        self.assertEqual(rows[0]["TotalPrice"], "3500")
+        self.assertEqual(rows[1]["quantity"], "3")
+        self.assertEqual(rows[1]["TotalPrice"], "600")
+        self.assertEqual(data["FinalPriceRepair"], "4100.00")
+
+    def test_second_save_editing_only_unit_price(self):
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload(
+                [
+                    {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+                    {"quantity": "3", "UnitPrice": "200", "TotalPrice": "600"},
+                ],
+            ),
+            edit_mode=True,
+        )
+        ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
+        # Change only the unit price of the second row.
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload([
+                {"_id": ids[0], "quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+                {"_id": ids[1], "quantity": "3", "UnitPrice": "150", "TotalPrice": "450"},
+            ]),
+            edit_mode=True,
+        )
+        data = self.persisted_rows(instance)
+        rows = data["cunspartTable"]
+        self.assertEqual(rows[1]["UnitPrice"], "150")
+        self.assertEqual(rows[1]["TotalPrice"], "450")
+        self.assertEqual(rows[0]["TotalPrice"], "5000")
+        self.assertEqual(data["FinalPriceRepair"], "5450.00")
+
+    def test_second_save_adding_a_new_row(self):
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload(
+                [{"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"}],
+            ),
+            edit_mode=True,
+        )
+        existing_id = self.persisted_rows(instance)["cunspartTable"][0]["_id"]
+
+        # Keep existing row and append a brand-new row (no _id).
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload([
+                {"_id": existing_id, "quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+                {"quantity": "3", "UnitPrice": "200", "TotalPrice": "600"},
+            ]),
+            edit_mode=True,
+        )
+        data = self.persisted_rows(instance)
+        rows = data["cunspartTable"]
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0]["_id"], existing_id)
+        self.assertEqual([r["TotalPrice"] for r in rows], ["5000", "600"])
+        self.assertEqual(data["FinalPriceRepair"], "5600.00")
+
+    def test_second_save_deleting_a_row_updates_aggregate(self):
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload([
+                {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+                {"quantity": "50", "UnitPrice": "50", "TotalPrice": "2500"},
+                {"quantity": "10", "UnitPrice": "1000", "TotalPrice": "10000"},
+            ]),
+            edit_mode=True,
+        )
+        ids = [r["_id"] for r in self.persisted_rows(instance)["cunspartTable"]]
+
+        # Submit only rows 1 and 3 -> row 2 is deleted.
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload([
+                {"_id": ids[0], "quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+                {"_id": ids[2], "quantity": "10", "UnitPrice": "1000", "TotalPrice": "10000"},
+            ]),
+            edit_mode=True,
+        )
+        data = self.persisted_rows(instance)
+        self.assertEqual(len(data["cunspartTable"]), 2)
+        self.assertEqual(data["FinalPriceRepair"], "15000.00")
+
+    def test_clearing_all_rows_sets_empty_group_and_zero_aggregate(self):
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ], note="history-source-test")
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data={"cunspartTable": [], "note": "x"},
+            edit_mode=True,
+        )
+        data = self.persisted_rows(instance)
+        self.assertEqual(data["cunspartTable"], [])
+        self.assertEqual(data["FinalPriceRepair"], "0.00")
+        self.assertEqual(data["note"], "x")
+
+    # --------------------------------------------------------------
+    # Formula on formula + aggregate semantics
+    # --------------------------------------------------------------
+
+    def test_row_formula_depending_on_another_row_formula(self):
+        # Discounted = TotalPrice - (TotalPrice * 10%) style chain:
+        # Vat = TotalPrice * 0.1 computed from the derived TotalPrice row.
+        vat = FormField.objects.create(
+            section=self.section, repeatable_group=self.group,
+            name="Vat", code="Vat",
+            field_type=FormulaService.FIELD_TYPE,
+            label="مالیات", order=3, is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "field", "field_id": self.total.pk},
+                {"type": "operator", "value": "*"},
+                {"type": "number", "value": "0.1"},
+            ], decimal_places=2),
+        )
+        FieldAccess.objects.create(
+            field=vat, step=self.step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True, can_edit=False,
+        )
+
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data=self.post_payload([
+                {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+            ]),
+            edit_mode=True,
+        )
+        data = self.persisted_rows(instance)
+        row = data["cunspartTable"][0]
+        self.assertEqual(row["TotalPrice"], "5000")
+        self.assertEqual(row["Vat"], "500.00")
+
+    def test_aggregate_over_group_uses_derived_row_formula_values(self):
+        # Reuse the existing FinalPriceRepair = SUM(TotalPrice) formula.
+        instance = self.save_rows([
+            {"quantity": "2", "UnitPrice": "100", "TotalPrice": "200"},
+            {"quantity": "3", "UnitPrice": "400", "TotalPrice": "1200"},
+        ])
+        self.assertEqual(self.persisted_rows(instance)["FinalPriceRepair"], "1400.00")
+
+    # --------------------------------------------------------------
+    # Forms without formulas / non-formula fields
+    # --------------------------------------------------------------
+
+    def test_form_without_formula_fields_is_untouched(self):
+        workflow = Workflow.objects.create(
+            name="Plain", code="PLAIN_NO_FORMULA", is_active=True,
+        )
+        step = WorkflowStep.objects.create(
+            workflow=workflow, name="S", code="S", order=1, is_active=True,
+        )
+        WorkflowMembership.objects.create(
+            workflow=workflow, user=self.user,
+            role=WorkflowMembership.Role.EXECUTOR, is_active=True,
+        )
+        form = FormDefinition.objects.create(
+            workflow=workflow, name="F", is_active=True,
+        )
+        section = FormSection.objects.create(
+            form=form, name="S", code="S", order=1, is_active=True,
+        )
+        field = FormField.objects.create(
+            section=section, name="city", code="city",
+            field_type=FormField.FieldType.TEXT,
+            label="شهر", order=1, is_active=True,
+        )
+        FieldAccess.objects.create(
+            field=field, step=step,
+            role=WorkflowMembership.Role.EXECUTOR,
+            can_view=True, can_edit=True,
+        )
+        instance = WorkflowInstance.objects.create(
+            workflow=workflow, current_step=step,
+            status=WorkflowInstance.Status.ACTIVE, started_by=self.user,
+        )
+        WorkflowStepExecution.objects.create(
+            instance=instance, workflow_step=step, performed_by=self.user,
+        )
+        FormDraftSaveService.save(
+            instance=instance,
+            step=step,
+            user=self.user,
+            submitted_data={"city": "Tehran"},
+            edit_mode=True,
+        )
+        self.assertEqual(
+            FormData.objects.get(instance=instance).data,
+            {"city": "Tehran"},
+        )
+
+    def test_normal_non_formula_fields_and_rows_preserved(self):
+        instance = self.make_instance()
+        self.save_draft(
+            instance=instance,
+            user=self.user,
+            submitted_data={
+                "note": "hello",
+                "cunspartTable": [
+                    {"quantity": "10", "UnitPrice": "500"},
+                ],
+            },
+            edit_mode=True,
+        )
+        data = self.persisted_rows(instance)
+        self.assertEqual(data["note"], "hello")
+        self.assertEqual(data["cunspartTable"][0]["quantity"], "10")
+
+    def test_history_recalculates_top_level_formula_instead_of_trusting_form_data(self):
+        configuration = HistoryConfiguration.objects.create(form=self.form)
+        HistoryField.objects.create(
+            configuration=configuration,
+            form_field=self.final,
+            display_label="قیمت نهایی",
+            display_order=1,
+        )
+
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ], note="history-source-test")
+
+        form_data = FormData.objects.get(instance=instance)
+        form_data.data = {**form_data.data, "FinalPriceRepair": "999999.99"}
+        form_data.save(update_fields=["data"])
+
+        snapshot = HistoryService.build_snapshot(
+            instance=instance,
+            user=self.user,
+        )
+
+        self.assertEqual(
+            snapshot["fields"][0]["code"],
+            self.final.code,
+        )
+        self.assertEqual(
+            snapshot["fields"][0]["value"],
+            "5000.00",
+        )
+        self.assertNotEqual(
+            snapshot["fields"][0]["value"],
+            form_data.data["FinalPriceRepair"],
+        )
+
+    # --------------------------------------------------------------
+    # GET rendering: read-only vs edit contexts
+    # --------------------------------------------------------------
+
+    def test_formula_definitions_does_not_expose_source_data(self):
+        from django.urls import reverse
+
+        # The formula result remains visible while one of its numeric inputs
+        # is explicitly hidden from the user.
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
+        FieldAccess.objects.filter(field=self.price, step=self.step).update(
+            can_view=False,
+            can_edit=False,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("operator_panel:formula_definitions", args=[instance.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertNotIn("source_data", payload)
+        self.assertEqual(payload["formula_results"][str(self.total.pk)]["values"], ["5000"])
+        self.assertEqual(payload["formula_results"][str(self.final.pk)]["value"], "5000.00")
+
+    def test_formula_definitions_calculates_posted_inputs_server_side(self):
+        from django.urls import reverse
+
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
+        FieldAccess.objects.filter(field=self.price, step=self.step).update(
+            can_view=False,
+            can_edit=False,
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("operator_panel:formula_definitions", args=[instance.pk]),
+            {
+                "cunspartTable_0_quantity": "7",
+                "cunspartTable_0_UnitPrice": "300",
+                "cunspartTable_0_TotalPrice": "999999",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertNotIn("source_data", payload)
+        self.assertEqual(payload["formula_results"][str(self.total.pk)]["values"], ["2100"])
+        self.assertEqual(payload["formula_results"][str(self.final.pk)]["value"], "2100.00")
+
+    def test_live_formula_http_recalculates_after_editing_persisted_row(self):
+        """Mirror the browser POST after an existing row is edited in place."""
+        from django.urls import reverse
+
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500"},
+        ])
+        row_id = self.persisted_rows(instance)["cunspartTable"][0]["_id"]
+
+        self.client.force_login(self.user)
+        response = self.client.post(
+            reverse("operator_panel:formula_definitions", args=[instance.pk]),
+            {
+                f"cunspartTable_0__id": row_id,
+                "cunspartTable_0_quantity": "7",
+                "cunspartTable_0_UnitPrice": "500",
+                # Browser may submit the previously rendered derived value.
+                "cunspartTable_0_TotalPrice": "5000",
+            },
+            HTTP_X_REQUESTED_WITH="XMLHttpRequest",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(
+            payload["formula_results"][str(self.total.pk)]["values"],
+            ["3500"],
+        )
+        self.assertEqual(
+            payload["formula_results"][str(self.final.pk)]["value"],
+            "3500.00",
+        )
+
+
+    def test_live_post_context_overlays_changed_nested_repeatable_input_before_formula_calculation(self):
+        """Verify the exact browser-style nested POST reaches the canonical context."""
+        from django.http import QueryDict
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="liveNested",
+            code="liveNested",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=4,
+            is_active=True,
+        )
+        live_value = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="liveValue",
+            code="liveValue",
+            field_type=FormField.FieldType.NUMBER,
+            label="Live value",
+            order=0,
+            is_active=True,
+        )
+
+        live_total = FormField.objects.create(
+            section=self.final_section,
+            name="LiveNestedTotal",
+            code="LiveNestedTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Live nested total",
+            order=10,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": live_value.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
+        instance = self.make_instance()
+        root_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=self.group,
+            row_order=0,
+        )
+        child_row = RepeatableRow.objects.create(
+            instance=instance,
+            group=child_group,
+            parent_row=root_row,
+            row_order=0,
+        )
+        RepeatableRowValue.objects.create(
+            row=child_row,
+            field=live_value,
+            decimal_value=Decimal("1.5"),
+        )
+
+        submitted = QueryDict("", mutable=True)
+        submitted.update({
+            f"{self.group.code}_0__id": str(root_row.pk),
+            f"{self.group.code}_0_{child_group.code}_0__id": str(child_row.pk),
+            f"{self.group.code}_0_{child_group.code}_0_{live_value.code}": "10",
+        })
+
+        context = _build_context_data(
+            instance=instance,
+            submitted_data=submitted,
+        )
+
+        root = context[self.group.code][0]
+        child = next(
+            group
+            for group in root["child_groups"]
+            if group["code"] == child_group.code
+        )
+        self.assertEqual(child["items"][0][live_value.code], "10")
+
+        calculated = FormulaService.calculate_context_data(
+            form=self.form,
+            data=context,
+        )
+
+        self.assertEqual(calculated[live_total.code], "10.00")
+
+    def test_live_nested_aggregate_matches_real_multi_row_edit_payload(self):
+        """Mirror the nested multi-row payload used by the live Formula scenario."""
+        from django.http import QueryDict
+
+        child_group = FormRepeatableGroup.objects.create(
+            section=self.section,
+            parent_group=self.group,
+            name="liveNestedMulti",
+            code="liveNestedMulti",
+            group_type=FormRepeatableGroup.GroupType.NORMAL,
+            display_type=FormRepeatableGroup.DisplayType.TABLE,
+            order=5,
+            is_active=True,
+        )
+        live_value = FormField.objects.create(
+            section=self.section,
+            repeatable_group=child_group,
+            name="liveValueMulti",
+            code="liveValueMulti",
+            field_type=FormField.FieldType.NUMBER,
+            label="Live value",
+            order=0,
+            is_active=True,
+        )
+        live_total = FormField.objects.create(
+            section=self.final_section,
+            name="LiveNestedMultiTotal",
+            code="LiveNestedMultiTotal",
+            field_type=FormulaService.FIELD_TYPE,
+            label="Live nested multi total",
+            order=11,
+            is_active=True,
+            choices=formula_config(tokens=[
+                {"type": "function", "value": "SUM"},
+                {"type": "paren", "value": "("},
+                {"type": "field", "field_id": live_value.pk},
+                {"type": "paren", "value": ")"},
+            ], decimal_places=2),
+        )
+
+        instance = self.make_instance()
+        root_rows = [
+            RepeatableRow.objects.create(instance=instance, group=self.group, row_order=0),
+            RepeatableRow.objects.create(instance=instance, group=self.group, row_order=1),
+        ]
+        child_values = [
+            ("1.5", root_rows[0], 0),
+            ("2", root_rows[0], 1),
+            ("1", root_rows[0], 2),
+            ("1.1", root_rows[0], 3),
+            ("2", root_rows[1], 0),
+        ]
+        child_rows = []
+        for value, parent, order in child_values:
+            row = RepeatableRow.objects.create(
+                instance=instance,
+                group=child_group,
+                parent_row=parent,
+                row_order=order,
+            )
+            RepeatableRowValue.objects.create(
+                row=row,
+                field=live_value,
+                decimal_value=Decimal(value),
+            )
+            child_rows.append(row)
+
+        submitted = QueryDict("", mutable=True)
+        for index, row in enumerate(root_rows):
+            submitted[f"{self.group.code}_{index}__id"] = str(row.pk)
+        for index, (value, parent, order) in enumerate(child_values):
+            child_index = order
+            if parent == root_rows[1]:
+                child_index = 0
+            submitted[
+                f"{self.group.code}_{0 if parent == root_rows[0] else 1}_{child_group.code}_{child_index}__id"
+            ] = str(child_rows[index].pk)
+            submitted[
+                f"{self.group.code}_{0 if parent == root_rows[0] else 1}_{child_group.code}_{child_index}_{live_value.code}"
+            ] = "10" if index == 0 else value
+
+        context = _build_context_data(
+            instance=instance,
+            submitted_data=submitted,
+        )
+        calculated = FormulaService.calculate_context_data(
+            form=self.form,
+            data=context,
+        )
+
+        self.assertEqual(calculated[live_total.code], "16.10")
+
+    def test_live_post_context_overlays_changed_repeatable_input_before_formula_calculation(self):
+        """Mirror the browser's flat POST and verify the pre-calculation context."""
+        from django.http import QueryDict
+
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500"},
+        ])
+
+        submitted = QueryDict("", mutable=True)
+        submitted.update({
+            "cunspartTable_0_quantity": "7",
+            "cunspartTable_0_UnitPrice": "500",
+            "cunspartTable_0_TotalPrice": "5000",
+        })
+
+        context = _build_context_data(
+            instance=instance,
+            submitted_data=submitted,
+        )
+
+        self.assertEqual(context["cunspartTable"][0]["quantity"], "7")
+        self.assertEqual(context["cunspartTable"][0]["UnitPrice"], "500")
+        self.assertNotEqual(context["cunspartTable"][0]["quantity"], "10")
+
+        calculated = FormulaService.calculate_context_data(
+            form=self.form,
+            data=context,
+        )
+
+        self.assertEqual(calculated["cunspartTable"][0]["TotalPrice"], "3500")
+        self.assertEqual(calculated["FinalPriceRepair"], "3500.00")
+
+
+    def test_read_only_get_renders_derived_values(self):
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+            {"quantity": "50", "UnitPrice": "50", "TotalPrice": "2500"},
+            {"quantity": "10", "UnitPrice": "1000", "TotalPrice": "10000"},
+        ])
+        ctx = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            edit_mode=False,
+        )
+        normal = {
+            item["field"].code: item
+            for section in ctx["sections"]
+            for item in section["fields"]
+        }
+        self.assertEqual(normal["FinalPriceRepair"]["display_value"], "17500.00")
+
+        group = next(
+            group
+            for section in ctx["sections"]
+            for group in section["repeatable_groups"]
+        )
+        totals = [
+            fld["display_value"]
+            for item in group["items"]
+            for fld in item["fields"]
+            if fld["field"].code == "TotalPrice"
+        ]
+        self.assertEqual(totals, ["5000", "2500", "10000"])
+
+    def test_edit_get_renders_derived_values(self):
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
+        ctx = DynamicFormService.get_form_for_step(
+            instance=instance,
+            user=self.user,
+            edit_mode=True,
+        )
+        group = next(
+            group
+            for section in ctx["sections"]
+            for group in section["repeatable_groups"]
+        )
+        totals = [
+            fld["value"]
+            for item in group["items"]
+            for fld in item["fields"]
+            if fld["field"].code == "TotalPrice"
+        ]
+        self.assertEqual(totals, ["5000"])
+
+    def test_repeatable_formula_fields_never_render_as_editable(self):
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+        ])
+        for edit_mode in (False, True):
+            ctx = DynamicFormService.get_form_for_step(
+                instance=instance,
+                user=self.user,
+                edit_mode=edit_mode,
+            )
+            for section in ctx["sections"]:
+                for item in section["fields"]:
+                    if item["field"].code in ("FinalPriceRepair",):
+                        self.assertFalse(item["can_edit"])
+                        self.assertFalse(item["permission_can_edit"])
+                for group in section["repeatable_groups"]:
+                    for fld in group["fields"]:
+                        if fld["field"].code == "TotalPrice":
+                            self.assertFalse(fld["can_edit"])
+
+    # --------------------------------------------------------------
+    # HTTP / template rendering: edit state must be server-signalled
+    # --------------------------------------------------------------
+
+    def test_formula_definitions_exposes_repeatable_formula_to_operator_ui(self):
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500"},
+        ])
+
+        from django.test import RequestFactory
+
+        request = RequestFactory().get(
+            f"/operator/workflow/{instance.pk}/formula-definitions/"
+        )
+        request.user = self.user
+        response = formula_definitions(request, instance.pk)
+
+        self.assertEqual(response.status_code, 200)
+        payload = json.loads(response.content)
+        formula = next(
+            item for item in payload["formulas"]
+            if item["field_id"] == self.total.pk
+        )
+        self.assertEqual(formula["scope"], "ROW")
+        self.assertEqual(formula["group_code"], self.group.code)
+        result = payload["formula_results"][str(self.total.pk)]
+        self.assertEqual(result["group_code"], self.group.code)
+        self.assertEqual(result["values"], ["5000"])
+        self.assertEqual(len(result["row_ids"]), 1)
+
+    def test_rendered_form_carries_server_signalled_edit_mode(self):
+        """
+        formula.js must never infer edit mode from DOM heuristics: the
+        read-only page intentionally still renders a .df-form-actions bar
+        (ویرایش / پاک کردن actions) and hidden device inputs, so neither
+        .df-form-actions presence nor input presence can distinguish the
+        two states.  The <form> element therefore carries an explicit
+        data-edit-mode attribute.
+        """
+        from django.urls import reverse
+
+        instance = self.save_rows([
+            {"quantity": "10", "UnitPrice": "500", "TotalPrice": "5000"},
+            {"quantity": "50", "UnitPrice": "50", "TotalPrice": "2500"},
+            {"quantity": "10", "UnitPrice": "1000", "TotalPrice": "10000"},
+        ])
+        url = reverse("operator_panel:workflow_instance", args=[instance.pk])
+        self.client.force_login(self.user)
+
+        read_only = self.client.get(url)
+        self.assertEqual(read_only.status_code, 200)
+        html = read_only.content.decode()
+
+        # Server-derived values are present in the read-only markup.
+        self.assertIn("17500.00", html)
+        self.assertIn("data-edit-mode=\"0\"", html)
+        # The actions bar that made the old heuristic fail is still there.
+        self.assertIn('class="df-form-actions"', html)
+        # No editable quantity input is rendered in read-only mode.
+        self.assertNotIn('name="cunspartTable_0_quantity"', html)
+
+        edit = self.client.get(url, {"edit": "1"})
+        self.assertEqual(edit.status_code, 200)
+        html = edit.content.decode()
+        self.assertIn("data-edit-mode=\"1\"", html)
+        self.assertIn('name="cunspartTable_0_quantity"', html)
+        self.assertIn('name="cunspartTable_1_UnitPrice"', html)

@@ -1,0 +1,170 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% if system_branding.favicon %}
+        <link rel="icon" href="{{ system_branding.favicon.url }}">
+    {% else %}
+        <link rel="icon" type="image/svg+xml" href="{% static 'operator_panel/favicon.svg' %}">
+    {% endif %}
+
+    <title>{% block title %}{{ system_branding.browser_title }}{% endblock %}</title>
+
+    <link rel="stylesheet" href="{% static 'operator_panel/css/app.css' %}">
+    <link rel="stylesheet" href="{% static 'operator_panel/css/theme.css' %}">
+    <link rel="stylesheet" href="{% static 'operator_panel/css/account.css' %}">
+    <link rel="stylesheet" href="{% static 'operator_panel/css/formula.css' %}">
+    <link rel="stylesheet" href="{% static 'operator_panel/vendor/jalalidatepicker/jalalidatepicker.min.css' %}">
+
+    <script>
+        (function () {
+            const theme = localStorage.getItem("df-theme") || "light";
+            document.documentElement.classList.toggle(
+                "theme-light",
+                theme !== "dark"
+            );
+        })();
+    </script>
+</head>
+
+<body>
+{% if messages %}
+    {% for message in messages %}
+        {% if forloop.last %}
+            {% if message.tags == "success" %}
+                <div class="df-success-modal" id="df-success-modal">
+                    <div class="df-success-modal-backdrop"></div>
+                    <div class="df-success-modal-card">
+                        <div class="df-success-modal-icon">✓</div>
+                        <h2>عملیات با موفقیت انجام شد</h2>
+                        <p>{{ message }}</p>
+                        <button type="button" class="df-button" id="df-success-modal-confirm">تأیید</button>
+                    </div>
+                </div>
+            {% elif message.tags == "error" %}
+                <div class="df-error-modal" id="df-error-modal">
+                    <div class="df-error-modal-backdrop"></div>
+                    <div class="df-error-modal-card">
+                        <div class="df-error-modal-icon">!</div>
+                        <h2>عملیات ناموفق بود</h2>
+                        <p>{{ message }}</p>
+                        <button type="button" class="df-button" id="df-error-modal-confirm">تأیید</button>
+                    </div>
+                </div>
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+{% endif %}
+
+{% if request.session.impersonated_user_id %}
+<div style="background: linear-gradient(90deg, #1E3A8A 0%, #2563EB 100%); color: #FFFFFF; padding: 8px 24px; font-size: 13px; display: flex; items-center; justify-content: space-between; position: sticky; top: 0; z-index: 9999; box-shadow: 0 2px 10px rgba(0,0,0,0.15); font-family: inherit;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <span style="background-color: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px; font-weight: 700; font-size: 11px;">⚠️ نظارت ادمین بر کارتابل</span>
+        <span>شما در حال مشاهده و فعالیت در کارتابل با هویت کاربر <strong>«{{ user.get_full_name|default:user.username }}»</strong> هستید.</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 14px;">
+        <a href="http://localhost:5173" target="_blank" rel="noopener noreferrer" style="color: #EFF6FF; text-decoration: underline; font-size: 12px;">
+            میز کار مدیریت (React) ↗
+        </a>
+        <a href="{% url 'accounts:impersonate_exit' %}" style="background-color: #FFFFFF; color: #1E40AF; padding: 4px 14px; border-radius: 6px; font-weight: 600; text-decoration: none; font-size: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+            خروج و بازگشت به حساب ادمین
+        </a>
+    </div>
+</div>
+{% endif %}
+
+<div class="df-layout">
+    {% include "operator_panel/sidebar.html" %}
+
+    <main class="df-main">
+        {% include "operator_panel/header.html" %}
+
+        {% block content %}
+        {% endblock %}
+    </main>
+</div>
+
+<div id="df-global-loading" class="df-global-loading" role="status" aria-live="polite" aria-hidden="true">
+    <div class="df-global-loading-card">
+        <span class="df-global-loading-spinner" aria-hidden="true"></span>
+        <span>لطفاً منتظر بمانید...</span>
+    </div>
+</div>
+
+<script src="{% static 'operator_panel/js/repeatable-naming.js' %}"></script>
+<script src="{% static 'operator_panel/js/global-loading.js' %}"></script>
+<script src="{% static 'operator_panel/js/app.js' %}"></script>
+<script src="{% static 'operator_panel/js/user-menu.js' %}"></script>
+<script src="{% static 'operator_panel/js/workflow-realtime.js' %}"></script>
+<script src="{% static 'operator_panel/js/formula.js' %}"></script>
+<script src="{% static 'operator_panel/js/file-upload.js' %}"></script>
+<script src="{% static 'operator_panel/vendor/jalalidatepicker/jalalidatepicker.min.js' %}"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    if (window.jalaliDatepicker) {
+        jalaliDatepicker.startWatch({
+            selector: "input[data-jdp]",
+            persianDigits: true,
+            date: true,
+            time: true,
+            hasSecond: true,
+            position: "right"
+        });
+    }
+});
+</script>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const modal = document.getElementById("df-success-modal");
+    const confirmButton = document.getElementById("df-success-modal-confirm");
+
+    if (modal && confirmButton) {
+        confirmButton.addEventListener("click", function () {
+            modal.remove();
+        });
+    }
+
+    const errorModal = document.getElementById("df-error-modal");
+    const errorConfirmButton = document.getElementById("df-error-modal-confirm");
+
+    if (errorModal && errorConfirmButton) {
+        errorConfirmButton.addEventListener("click", function () {
+            errorModal.remove();
+        });
+    }
+
+    const themeButton = document.getElementById("df-theme-toggle");
+
+    if (themeButton) {
+        function updateThemeButton() {
+            const isLight = document.documentElement.classList.contains("theme-light");
+            themeButton.setAttribute(
+                "aria-label",
+                isLight ? "تغییر به تم تاریک" : "تغییر به تم روشن"
+            );
+            themeButton.setAttribute(
+                "title",
+                isLight ? "تم تاریک" : "تم روشن"
+            );
+        }
+
+        themeButton.addEventListener("click", function () {
+            const isLight = document.documentElement.classList.toggle("theme-light");
+            localStorage.setItem("df-theme", isLight ? "light" : "dark");
+            updateThemeButton();
+        });
+
+        updateThemeButton();
+    }
+
+    document.title = document.title.replace(
+        "Dolphin Flow",
+        "{{ system_branding.browser_title|escapejs }}"
+    );
+});
+</script>
+</body>
+</html>

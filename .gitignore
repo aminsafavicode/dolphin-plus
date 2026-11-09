@@ -1,0 +1,55 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual Environment
+venv/
+.venv/
+.venv_linux/
+env/
+
+# Django
+*.log
+db.sqlite3
+media/
+
+# Backup archives (never commit backup files)
+backend/backups/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+dist/
+build/
+
+# Frontend
+.vite/
+
+# Docker
+*.pid
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+.freebuff/
+_
+x
+
+# GitLab Runner
+gitlab-runner.exe
+config.toml
+builds/
+cache/
+.runner_system_id
+
+# Celery
+celerybeat-schedule*

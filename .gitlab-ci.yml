@@ -1,0 +1,23 @@
+stages:
+  - lint
+  - test
+
+variables:
+  PYTHONUNBUFFERED: "1"
+
+lint:
+  stage: lint
+  script:
+    - python -m pip install --quiet flake8
+    - python -m flake8 backend --count --select=E9,F63,F7,F82 --exclude=.venv,.venv_linux --show-source --statistics
+  allow_failure: true
+
+test_sanity:
+  stage: test
+  script:
+    - python -c "import shutil, os; shutil.copy('backend/.env.example', 'backend/.env') if not os.path.exists('backend/.env') else None"
+    - cd backend
+    - python manage.py check
+  only:
+    - branches
+    - merge_requests

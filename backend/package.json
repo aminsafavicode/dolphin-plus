@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:js": "node --test tests/js/repeatable-naming.test.js tests/js/app-repeatable.test.js"
+  },
+  "devDependencies": {
+    "jsdom": "^27.4.0"
+  }
+}

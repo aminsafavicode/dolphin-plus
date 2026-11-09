@@ -1,0 +1,222 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+
+import "../../operator_panel/static/operator_panel/js/repeatable-naming.js";
+
+const {
+    reindexRepeatableFieldName,
+    buildRepeatableGroupPrefix,
+} = globalThis.DolphinFlowRepeatableNaming;
+
+test("reindexes a root repeatable field", () => {
+    assert.equal(
+        reindexRepeatableFieldName(
+            "customers_0_name",
+            "customers_",
+            1,
+        ),
+        "customers_1_name",
+    );
+});
+
+test("reindexes a nested repeatable field without losing parent context", () => {
+    assert.equal(
+        reindexRepeatableFieldName(
+            "customers_0_contacts_0_name",
+            "customers_0_contacts_",
+            1,
+        ),
+        "customers_0_contacts_1_name",
+    );
+});
+
+test("reindexes the child independently for different parent rows", () => {
+    assert.equal(
+        reindexRepeatableFieldName(
+            "customers_0_contacts_0_name",
+            "customers_0_contacts_",
+            1,
+        ),
+        "customers_0_contacts_1_name",
+    );
+
+    assert.equal(
+        reindexRepeatableFieldName(
+            "customers_1_contacts_0_name",
+            "customers_1_contacts_",
+            0,
+        ),
+        "customers_1_contacts_0_name",
+    );
+});
+
+test("reindexes nested row identity name but preserves its value", () => {
+    const name = reindexRepeatableFieldName(
+        "customers_0_contacts_0__id",
+        "customers_0_contacts_",
+        1,
+    );
+
+    assert.equal(name, "customers_0_contacts_1__id");
+
+    const value = "abc-123";
+    assert.equal(value, "abc-123");
+});
+
+test("reindexes a deeper nested field while preserving the full ancestor path", () => {
+    assert.equal(
+        reindexRepeatableFieldName(
+            "customers_0_contacts_0_addresses_0_city",
+            "customers_0_contacts_",
+            1,
+        ),
+        "customers_0_contacts_1_addresses_0_city",
+    );
+});
+
+test("reindexes remaining nested rows independently after deleting a child row", () => {
+    const parentZeroRemaining = reindexRepeatableFieldName(
+        "customers_0_contacts_1_name",
+        "customers_0_contacts_",
+        0,
+    );
+
+    const parentOneRemaining = reindexRepeatableFieldName(
+        "customers_1_contacts_1_name",
+        "customers_1_contacts_",
+        0,
+    );
+
+    assert.equal(
+        parentZeroRemaining,
+        "customers_0_contacts_0_name",
+    );
+    assert.equal(
+        parentOneRemaining,
+        "customers_1_contacts_0_name",
+    );
+
+    assert.notEqual(
+        parentZeroRemaining,
+        "customers_1_contacts_0_name",
+    );
+    assert.notEqual(
+        parentOneRemaining,
+        "customers_0_contacts_0_name",
+    );
+});
+
+test("adds a child row under the second parent without changing the first parent's names", () => {
+    const parentZeroPrefix = buildRepeatableGroupPrefix(
+        [{ groupCode: "customers", index: 0 }],
+        "contacts",
+    );
+    const parentOnePrefix = buildRepeatableGroupPrefix(
+        [{ groupCode: "customers", index: 1 }],
+        "contacts",
+    );
+
+    const parentZeroExisting = reindexRepeatableFieldName(
+        "customers_0_contacts_0_name",
+        parentZeroPrefix,
+        0,
+    );
+    const parentOneAdded = reindexRepeatableFieldName(
+        "customers_1_contacts_0_name",
+        parentOnePrefix,
+        0,
+    );
+
+    assert.equal(
+        parentZeroExisting,
+        "customers_0_contacts_0_name",
+    );
+    assert.equal(
+        parentOneAdded,
+        "customers_1_contacts_0_name",
+    );
+    assert.notEqual(
+        parentOneAdded,
+        parentZeroExisting,
+    );
+});
+
+test("deletes a nested child row without reindexing another parent", () => {
+    const parentZeroPrefix = buildRepeatableGroupPrefix(
+        [{ groupCode: "customers", index: 0 }],
+        "contacts",
+    );
+    const parentOnePrefix = buildRepeatableGroupPrefix(
+        [{ groupCode: "customers", index: 1 }],
+        "contacts",
+    );
+
+    const parentZeroRemaining = reindexRepeatableFieldName(
+        "customers_0_contacts_1_name",
+        parentZeroPrefix,
+        0,
+    );
+    const parentOneRemaining = reindexRepeatableFieldName(
+        "customers_1_contacts_0_name",
+        parentOnePrefix,
+        0,
+    );
+
+    assert.equal(
+        parentZeroRemaining,
+        "customers_0_contacts_0_name",
+    );
+    assert.equal(
+        parentOneRemaining,
+        "customers_1_contacts_0_name",
+    );
+    assert.notEqual(
+        parentZeroRemaining,
+        parentOneRemaining,
+    );
+});
+
+test("builds distinct child prefixes for different parent rows", () => {
+    assert.equal(
+        buildRepeatableGroupPrefix(
+            [
+                { groupCode: "customers", index: 0 },
+            ],
+            "contacts",
+        ),
+        "customers_0_contacts_",
+    );
+
+    assert.equal(
+        buildRepeatableGroupPrefix(
+            [
+                { groupCode: "customers", index: 1 },
+            ],
+            "contacts",
+        ),
+        "customers_1_contacts_",
+    );
+});
+
+test("builds the full nested repeatable group prefix from parent context", () => {
+    assert.equal(
+        buildRepeatableGroupPrefix(
+            [
+                { groupCode: "customers", index: 0 },
+            ],
+            "contacts",
+        ),
+        "customers_0_contacts_",
+    );
+
+    assert.equal(
+        buildRepeatableGroupPrefix(
+            [
+                { groupCode: "customers", index: 1 },
+                { groupCode: "contacts", index: 0 },
+            ],
+            "addresses",
+        ),
+        "customers_1_contacts_0_addresses_",
+    );
+});

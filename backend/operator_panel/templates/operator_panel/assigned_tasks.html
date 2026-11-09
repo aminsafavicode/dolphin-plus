@@ -1,0 +1,95 @@
+{% extends "operator_panel/base.html" %}
+
+{% block title %}وظایف اختصاص‌یافته به من | Dolphin Flow{% endblock %}
+
+{% block content %}
+<style>
+.df-page-heading { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; }
+.df-page-heading-title { margin:0 0 6px; font-size:18px; font-weight:600; color:#0f172a; }
+.df-page-heading-meta { margin:0; color:var(--muted); font-size:12px; font-weight:400; }
+.df-process-filters { padding:18px; margin-bottom:18px; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:var(--df-shadow-sm); }
+.df-process-filter-form { display:grid; grid-template-columns:minmax(220px,2fr) minmax(150px,1fr) minmax(180px,1fr) auto; gap:12px; align-items:end; }
+.df-filter-field { display:flex; flex-direction:column; gap:6px; }
+.df-filter-field label { color:#334155; font-size:12px; font-weight:500; }
+.df-filter-field input, .df-filter-field select { width:100%; height:38px; padding:0 12px; border:1px solid var(--border); border-radius:8px; background:#f8fafc; color:#0f172a; font:inherit; font-size:13px; outline:none; transition:all 0.15s ease; }
+.df-filter-field input:focus, .df-filter-field select:focus { background:#fff; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.1); }
+.df-filter-actions { display:flex; gap:8px; }
+.df-button { height:38px; padding:0 16px; display:inline-flex; align-items:center; justify-content:center; border:1px solid transparent; border-radius:8px; background:#2563eb; color:#fff; font:inherit; font-size:12px; font-weight:500; cursor:pointer; transition:all 0.15s ease; }
+.df-button:hover { background:#1d4ed8; }
+.df-button-secondary { border-color:var(--border); background:#fff; color:#475569; }
+.df-button-secondary:hover { background:#f8fafc; color:#0f172a; border-color:#cbd5e1; }
+.df-task-list { overflow:hidden; background:#fff; border:1px solid var(--border); border-radius:12px; box-shadow:var(--df-shadow-sm); }
+.df-task-row { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:16px 20px; border-bottom:1px solid #f1f5f9; }
+.df-task-row:last-child { border-bottom:0; }
+.df-task-title { font-size:13px; font-weight:600; color:#0f172a; }
+.df-task-title span { color:#64748b; font-weight:500; font-family:monospace; margin-right:4px; }
+.df-task-meta { display:flex; flex-wrap:wrap; gap:8px; margin-top:6px; color:#64748b; font-size:12px; }
+.df-empty-state { padding:48px 20px; text-align:center; color:#94a3b8; font-size:13px; }
+.df-pagination { display:flex; align-items:center; justify-content:center; gap:16px; padding:16px; border-top:1px solid #f1f5f9; color:#64748b; font-size:12px; }
+.df-pagination a { padding:6px 12px; border:1px solid var(--border); border-radius:8px; background:#fff; color:#334155; font-size:12px; text-decoration:none; }
+.df-pagination a:hover { background:#f8fafc; border-color:#cbd5e1; }
+@media (max-width:900px) { .df-process-filter-form { grid-template-columns:1fr 1fr; } .df-filter-search,.df-filter-actions { grid-column:1 / -1; } }
+@media (max-width:600px) { .df-process-filter-form { grid-template-columns:1fr; } .df-filter-search,.df-filter-actions { grid-column:auto; } .df-task-row { align-items:flex-start; flex-direction:column; } }
+</style>
+
+<section class="df-content">
+    <div class="df-page-heading">
+        <div>
+            <h1 class="df-page-heading-title">وظایف اختصاص‌یافته به من</h1>
+            <p class="df-page-heading-meta">فقط وظایف فعالی که مرحله جاری مستقیماً به شما اختصاص داده شده است.</p>
+        </div>
+    </div>
+
+    <div class="df-card df-process-filters">
+        <form method="get" class="df-process-filter-form">
+            <div class="df-filter-field df-filter-search">
+                <label for="task-search">جستجو</label>
+                <input id="task-search" type="search" name="q" value="{{ search }}" placeholder="نام فرآیند، کد یا شماره...">
+            </div>
+            <div class="df-filter-field">
+                <label for="task-status">وضعیت</label>
+                <select id="task-status" name="status">
+                    <option value="">همه وضعیت‌ها</option>
+                    {% for value, label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="df-filter-field">
+                <label for="task-workflow">نوع فرآیند</label>
+                <select id="task-workflow" name="workflow">
+                    <option value="">همه فرآیندها</option>
+                    {% for item in workflows %}<option value="{{ item.workflow_id }}" {% if selected_workflow == item.workflow_id|stringformat:"s" %}selected{% endif %}>{{ item.workflow__name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="df-filter-actions">
+                <button type="submit" class="df-button">جستجو</button>
+                <a href="{% url 'operator_panel:assigned_tasks' %}" class="df-button df-button-secondary">پاک کردن</a>
+            </div>
+        </form>
+    </div>
+
+    <div class="df-card df-panel df-task-list">
+        <div class="df-panel-header"><div class="df-panel-title">وظایف</div><div>{{ page_obj.paginator.count }} مورد</div></div>
+        {% for instance in instances %}
+            <div class="df-task-row">
+                <div>
+                    <div class="df-task-title">{{ instance.workflow.name }} <span>#{{ instance.started_at|date:"ymd" }}-{{ instance.pk|stringformat:"06d" }}</span></div>
+                    <div class="df-task-meta">
+                        {% if instance.current_step %}<span>مرحله: {{ instance.current_step.name }}</span><span>·</span>{% endif %}
+                        <span>{{ instance.get_status_display }}</span><span>·</span><span>{{ instance.started_at|date:"Y/m/d - H:i" }}</span>
+                    </div>
+                </div>
+                <a href="{% url 'operator_panel:workflow_instance' instance.pk %}" class="df-status df-status-warning">انجام</a>
+            </div>
+        {% empty %}
+            <div class="df-empty-state">در حال حاضر وظیفه‌ای مستقیماً به شما اختصاص داده نشده است.</div>
+        {% endfor %}
+        {% if page_obj.paginator.num_pages > 1 %}
+            <div class="df-pagination">
+                {% if page_obj.has_previous %}<a href="?q={{ search|urlencode }}&status={{ selected_status|urlencode }}&workflow={{ selected_workflow|urlencode }}&page={{ page_obj.previous_page_number }}">قبلی</a>{% endif %}
+                <span>صفحه {{ page_obj.number }} از {{ page_obj.paginator.num_pages }}</span>
+                {% if page_obj.has_next %}<a href="?q={{ search|urlencode }}&status={{ selected_status|urlencode }}&workflow={{ selected_workflow|urlencode }}&page={{ page_obj.next_page_number }}">بعدی</a>{% endif %}
+            </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
