@@ -12,9 +12,20 @@ if ! docker info > /dev/null 2>&1; then
 fi
 
 # Check .env
+if [ ! -f ".env" ] && [ -f ".env.example" ]; then
+    echo "[*] Creating .env from template..."
+    cp .env.example .env
+fi
+
 if [ ! -f "backend/.env" ] && [ -f "backend/.env.example" ]; then
     echo "[*] Creating backend/.env from template..."
     cp backend/.env.example backend/.env
+fi
+
+# Build frontend if dist doesn't exist
+if [ ! -d "frontend/dist" ]; then
+    echo "[*] Building React Admin frontend inside temporary node container..."
+    docker run --rm -v "$(pwd)/frontend:/app" -w /app node:20-alpine sh -c "npm install && npm run build:admin"
 fi
 
 # Boot services
@@ -23,11 +34,13 @@ docker compose up -d --build
 
 echo ""
 echo "=========================================================="
-echo "✅  Dolphin Flow is successfully running!"
+echo "✅  Dolphin Plus is successfully running!"
 echo "=========================================================="
-echo "🌐  Operator Panel:     http://localhost:8000/operator/"
-echo "⚙️   Django Admin:       http://localhost:8000/admin/"
-echo "📊  Real-time Sockets:  ws://localhost:8000/ws/operator/dashboard/"
-echo "📋  View Logs:          docker compose logs -f"
-echo "🛑  Stop System:        docker compose down"
+echo "🌐  Operator Panel (Main):  http://localhost/ (or /operator/)"
+echo "🚀  React Admin Studio:     http://localhost/admin/"
+echo "⚙️   Django Unfold Admin:    http://localhost/djangoadmin/"
+echo "🔌  REST API:               http://localhost/api/"
+echo "📊  Real-time Sockets:      ws://localhost/ws/"
+echo "📋  View Logs:              docker compose logs -f"
+echo "🛑  Stop System:            docker compose down"
 echo "=========================================================="
