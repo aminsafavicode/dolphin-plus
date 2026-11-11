@@ -25,6 +25,7 @@ export default defineConfig({
     host: true,
   },
   build: {
+    emptyOutDir: false,
     rollupOptions: {
       input: {
         operator: resolve(__dirname, 'operator.html'),
