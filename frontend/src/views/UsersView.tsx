@@ -269,29 +269,29 @@ export const UsersView: FC = () => {
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-5 min-w-0">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center shadow-sm">
-            <Users className="w-6 h-6" />
+      <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-teal-50 text-teal-600 flex items-center justify-center shadow-sm shrink-0">
+            <Users className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">مدیریت کاربران، مشاغل و نقش‌های سازمانی (RBAC)</h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900">مدیریت کاربران، مشاغل و نقش‌های سازمانی (RBAC)</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               مدیریت حساب‌های پرسنل، تنظیم امن کلمه عبور، گروه‌ها، عناوین شغلی و عضویت در فرآیندها
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           {activeTab === 'users' && (
             <button
               onClick={() => {
                 resetUserForm();
                 setIsNewUserModalOpen(true);
               }}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>تعریف کاربر جدید</span>
@@ -300,7 +300,7 @@ export const UsersView: FC = () => {
           {activeTab === 'jobs' && (
             <button
               onClick={() => setIsNewJobModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>تعریف عنوان شغلی جدید</span>
@@ -309,7 +309,7 @@ export const UsersView: FC = () => {
           {activeTab === 'groups' && (
             <button
               onClick={() => setIsNewGroupModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>ایجاد گروه / تیم جدید</span>
@@ -318,7 +318,7 @@ export const UsersView: FC = () => {
           {activeTab === 'memberships' && (
             <button
               onClick={() => setIsNewMembershipModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md shadow-teal-500/20 transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>انتصاب کاربر به فرآیند</span>
@@ -328,10 +328,10 @@ export const UsersView: FC = () => {
       </div>
 
       {/* Navigation Tabs */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-2.5">
         <button
           onClick={() => setActiveTab('users')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'users'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-white'
@@ -343,7 +343,7 @@ export const UsersView: FC = () => {
 
         <button
           onClick={() => setActiveTab('jobs')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'jobs'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-white'
@@ -355,7 +355,7 @@ export const UsersView: FC = () => {
 
         <button
           onClick={() => setActiveTab('groups')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'groups'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-white'
@@ -367,7 +367,7 @@ export const UsersView: FC = () => {
 
         <button
           onClick={() => setActiveTab('memberships')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'memberships'
               ? 'bg-blue-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-white'
@@ -383,7 +383,7 @@ export const UsersView: FC = () => {
       {/* ============================================================== */}
       {activeTab === 'users' && (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-slate-900">لیست پرسنل و کاربران سیستم</h3>
             <span className="text-xs font-mono font-bold text-teal-700 bg-teal-50 px-2.5 py-1 rounded-lg">
               {users.length} حساب کاربری
@@ -526,7 +526,7 @@ export const UsersView: FC = () => {
       {/* TAB 2: JOBS LIST */}
       {/* ============================================================== */}
       {activeTab === 'jobs' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 @md:grid-cols-2 @4xl:grid-cols-3 gap-4">
           {jobs.length === 0 ? (
             <div className="col-span-full bg-white rounded-xl p-12 text-center text-xs text-slate-400 border border-slate-200">
               هنوز عنوان شغلی در سازمان ثبت نشده است. روی «تعریف عنوان شغلی جدید» کلیک کنید.
@@ -535,7 +535,7 @@ export const UsersView: FC = () => {
             jobs.map((j) => (
               <div
                 key={j.id}
-                className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex flex-col justify-between"
+                className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm flex flex-col justify-between min-w-0"
               >
                 <div>
                   <div className="flex items-start justify-between mb-2">
@@ -567,7 +567,7 @@ export const UsersView: FC = () => {
       {/* TAB 3: GROUPS LIST */}
       {/* ============================================================== */}
       {activeTab === 'groups' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 @md:grid-cols-2 @4xl:grid-cols-3 gap-4">
           {groups.length === 0 ? (
             <div className="col-span-full bg-white rounded-xl p-12 text-center text-xs text-slate-400 border border-slate-200">
               هنوز گروه یا تیم کاری تعریف نشده است. روی «ایجاد گروه / تیم جدید» کلیک کنید.
@@ -576,7 +576,7 @@ export const UsersView: FC = () => {
             groups.map((g) => (
               <div
                 key={g.id}
-                className="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm flex items-center justify-between"
+                className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm flex items-center justify-between gap-2 min-w-0"
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold">
@@ -605,7 +605,7 @@ export const UsersView: FC = () => {
       {/* ============================================================== */}
       {activeTab === 'memberships' && (
         <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-sm font-semibold text-slate-900">نقش‌های فرآیندی کاربران (Workflow Memberships)</h3>
               <p className="text-xs text-slate-400 mt-0.5">

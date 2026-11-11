@@ -241,26 +241,26 @@ export const SlaCalendarView: FC = () => {
   const availableSteps = activeWf?.steps || [];
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-5 min-w-0">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shadow-sm">
-            <Clock className="w-6 h-6" />
+      <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center shadow-sm shrink-0">
+            <Clock className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">تقویم کاری سازمانی و موتور تعهدات زمانی (SLA Engine)</h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900">تقویم کاری سازمانی و موتور تعهدات زمانی (SLA Engine)</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               مدیریت شیفت‌های کاری هفتگی، تعطیلات رسمی و کشوری، و محاسبه دقیق سررسید و اخطارهای نقض SLA
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           {activeTab === 'calendars' && (
             <button
               onClick={() => setIsNewCalModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md shadow-purple-500/20 transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>تقویم کاری جدید</span>
@@ -270,7 +270,7 @@ export const SlaCalendarView: FC = () => {
           {activeTab === 'exceptions' && selectedCalendar && (
             <button
               onClick={() => setIsNewExceptionModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>ثبت تعطیلی / استثنای جدید</span>
@@ -280,7 +280,7 @@ export const SlaCalendarView: FC = () => {
           {activeTab === 'sla' && (
             <button
               onClick={() => setIsNewSlaModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>تعریف قرارداد زمانی (SLA)</span>
@@ -290,40 +290,40 @@ export const SlaCalendarView: FC = () => {
       </div>
 
       {/* Tabs Switcher */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2">
+      <div className="flex flex-wrap items-center gap-1.5 border-b border-slate-200 pb-2.5">
         <button
           onClick={() => setActiveTab('calendars')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'calendars'
               ? 'bg-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-white'
           }`}
         >
-          <Clock className="w-3.5 h-3.5" />
+          <Clock className="w-3.5 h-3.5 shrink-0" />
           <span>تقویم‌ها و شیفت‌های هفتگی ({calendars.length})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('exceptions')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'exceptions'
               ? 'bg-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-white'
           }`}
         >
-          <CalendarIcon className="w-3.5 h-3.5" />
+          <CalendarIcon className="w-3.5 h-3.5 shrink-0" />
           <span>تعطیلات و استثنائات تقویمی ({selectedCalendar?.exceptions?.length || 0})</span>
         </button>
 
         <button
           onClick={() => setActiveTab('sla')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+          className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
             activeTab === 'sla'
               ? 'bg-purple-600 text-white shadow-sm'
               : 'text-slate-600 hover:bg-white'
           }`}
         >
-          <Layers className="w-3.5 h-3.5" />
+          <Layers className="w-3.5 h-3.5 shrink-0" />
           <span>تعهدات زمانی مراحل فرآیند ({slaPolicies.length})</span>
         </button>
       </div>
@@ -332,9 +332,9 @@ export const SlaCalendarView: FC = () => {
       {/* TAB 1: CALENDARS & WEEKLY SHIFTS */}
       {/* ============================================================== */}
       {activeTab === 'calendars' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-5">
           {/* Left Column: Calendar List */}
-          <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-sm space-y-4">
+          <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm space-y-4 min-w-0">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <h3 className="text-sm font-semibold text-slate-900">تقویم‌های فعال سیستم</h3>
               <span className="text-xs font-mono font-bold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-lg">
@@ -384,12 +384,12 @@ export const SlaCalendarView: FC = () => {
           </div>
 
           {/* Right Column: Weekly Schedule & Shift Intervals */}
-          <div className="lg:col-span-2 space-y-6">
+          <div className="@4xl:col-span-2 space-y-5 min-w-0">
             {selectedCalendar ? (
-              <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-sm space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-                  <div>
-                    <div className="flex items-center gap-2">
+              <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm space-y-4">
+                <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="px-2 py-0.5 rounded-md bg-purple-100 text-purple-700 font-mono text-xs font-bold">
                         ID: {selectedCalendar.id}
                       </span>
@@ -400,7 +400,7 @@ export const SlaCalendarView: FC = () => {
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
                     <button
                       onClick={handleApplyPresetIran}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all cursor-pointer"
@@ -432,7 +432,7 @@ export const SlaCalendarView: FC = () => {
                     return (
                       <div
                         key={sched.id}
-                        className={`py-3.5 px-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                        className={`py-3 px-3.5 rounded-xl flex flex-col @2xl:flex-row @2xl:items-center justify-between gap-3 transition-colors ${
                           edit.is_working ? 'bg-slate-50/50' : 'bg-slate-100/40 opacity-70'
                         }`}
                       >
@@ -529,9 +529,9 @@ export const SlaCalendarView: FC = () => {
       {/* TAB 2: CALENDAR EXCEPTIONS & HOLIDAYS */}
       {/* ============================================================== */}
       {activeTab === 'exceptions' && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden p-6 space-y-5">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div>
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="min-w-0">
               <h3 className="text-sm font-semibold text-slate-900">
                 تعطیلات رسمی و استثنائات تقویم {selectedCalendar ? `«${selectedCalendar.name}»` : ''}
               </h3>
@@ -543,7 +543,7 @@ export const SlaCalendarView: FC = () => {
             {selectedCalendar && (
               <button
                 onClick={() => setIsNewExceptionModalOpen(true)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-500/20 transition-all cursor-pointer shrink-0 whitespace-nowrap"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>ثبت استثنای جدید</span>
@@ -560,11 +560,11 @@ export const SlaCalendarView: FC = () => {
               هیچ تعطیلی یا استثنایی برای این تقویم ثبت نشده است. روی «ثبت استثنای جدید» کلیک کنید.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 @md:grid-cols-2 @4xl:grid-cols-3 gap-4">
               {selectedCalendar.exceptions.map((exc: any) => (
                 <div
                   key={exc.id}
-                  className="p-5 rounded-2xl border border-slate-200/80 bg-slate-50 flex flex-col justify-between"
+                  className="p-4 rounded-xl border border-slate-200/80 bg-slate-50 flex flex-col justify-between min-w-0"
                 >
                   <div>
                     <div className="flex items-start justify-between mb-2">
@@ -608,9 +608,9 @@ export const SlaCalendarView: FC = () => {
       {/* TAB 3: STEP SLA POLICIES */}
       {/* ============================================================== */}
       {activeTab === 'sla' && (
-        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden p-6 space-y-5">
-          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
-            <div>
+        <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden p-4 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="min-w-0">
               <h3 className="text-sm font-semibold text-slate-900">قراردادهای سطح خدمت مراحل فرآیند (Step SLA Policies)</h3>
               <p className="text-xs text-slate-400 mt-0.5">
                 تعیین سقف مهلت مجاز کاری برای انجام هر مرحله و زمان ارسال هشدار پیش از نقض تعهد
@@ -619,7 +619,7 @@ export const SlaCalendarView: FC = () => {
 
             <button
               onClick={() => setIsNewSlaModalOpen(true)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer shrink-0 whitespace-nowrap"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>تعریف تعهد زمانی (SLA)</span>

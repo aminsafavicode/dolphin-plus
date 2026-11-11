@@ -59,15 +59,15 @@ export const BackupView: FC = () => {
   };
 
   return (
-    <div className="space-y-7">
+    <div className="space-y-5 min-w-0">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-sm">
-            <ShieldCheck className="w-6 h-6" />
+      <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shadow-sm shrink-0">
+            <ShieldCheck className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">پیشخوان جامع پشتیبان‌گیری و تاب‌آوری (Disaster Recovery)</h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900">پیشخوان جامع پشتیبان‌گیری و تاب‌آوری (Disaster Recovery)</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               پایش بلادرنگ دیسک، زمان‌بندی‌های خودکار، تهیه نسخه پشتیبان دستی و تاب‌آوری دیتابیس
             </p>
@@ -77,7 +77,7 @@ export const BackupView: FC = () => {
         <button
           onClick={handleTriggerBackup}
           disabled={isBackingUp}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer self-start sm:self-auto"
+          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer self-start @3xl:self-auto shrink-0 whitespace-nowrap"
         >
           <RefreshCw className={`w-4 h-4 ${isBackingUp ? 'animate-spin' : ''}`} />
           <span>{isBackingUp ? 'در حال تهیه پشتیبان...' : 'تهیه نسخه پشتیبان دستی (فوری)'}</span>
@@ -85,10 +85,10 @@ export const BackupView: FC = () => {
       </div>
 
       {/* Disk Storage Capacity Breakdown Bar */}
-      <div className="bg-white rounded-xl p-6 border border-slate-200/80 shadow-sm space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <HardDrive className="w-4 h-4 text-blue-600" />
+            <HardDrive className="w-4 h-4 text-blue-600 shrink-0" />
             <h3 className="text-sm font-semibold text-slate-800">وضعیت فضای ذخیره‌سازی و دیسک سرور</h3>
           </div>
           <span className="text-xs font-mono font-bold text-slate-600">
@@ -107,7 +107,7 @@ export const BackupView: FC = () => {
         </div>
 
         {/* Details Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 text-xs">
+        <div className="grid grid-cols-1 @sm:grid-cols-2 @4xl:grid-cols-4 gap-3 pt-1 text-xs">
           <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/60">
             <span className="text-slate-400 block mb-0.5">پایگاه داده PostgreSQL:</span>
             <span className="font-semibold text-slate-800 font-mono">{disk.pg_size_mb} MB</span>
@@ -131,7 +131,7 @@ export const BackupView: FC = () => {
 
       {/* Backups List Table */}
       <div className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold text-slate-900">آرشیو نسخه‌های پشتیبان ثبت‌شده</h3>
             <p className="text-xs text-slate-400 mt-0.5">فایل‌های پشتیبان فشرده، اعتبارسنجی چکسام و لاگ تاریخچه</p>

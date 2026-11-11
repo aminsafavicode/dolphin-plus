@@ -16,9 +16,9 @@ export const SlaGaugeCard: FC<SlaGaugeProps> = ({
   const strokeDashoffset = semiCircumference * (1 - Math.min(rate, 100) / 100);
 
   return (
-    <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between h-full">
+    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between h-full min-w-0">
       {/* Title */}
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
         <h3 className="text-sm font-semibold text-slate-800">تعهد زمانی (SLA)</h3>
         <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-green-50 text-green-700 border border-green-200/50">
           پایدار
@@ -26,8 +26,8 @@ export const SlaGaugeCard: FC<SlaGaugeProps> = ({
       </div>
 
       {/* Monochromatic Arc Gauge */}
-      <div className="flex flex-col items-center justify-center my-3 relative">
-        <svg className="w-44 h-24 overflow-visible" viewBox="0 0 140 75">
+      <div className="flex flex-col items-center justify-center my-2 relative">
+        <svg className="w-48 h-26 overflow-visible" viewBox="0 0 140 78">
           {/* Background Arc */}
           <path
             d="M 15 70 A 55 55 0 0 1 125 70"
@@ -50,20 +50,20 @@ export const SlaGaugeCard: FC<SlaGaugeProps> = ({
         </svg>
 
         {/* Center Percentage Display */}
-        <div className="absolute bottom-1 text-center">
-          <div className="text-2xl font-semibold text-slate-800 tracking-tight">
+        <div className="-mt-10 text-center">
+          <div className="text-xl font-semibold text-slate-800 tracking-tight leading-tight">
             {rate.toLocaleString('fa-IR')}٪
           </div>
-          <div className="text-xs text-slate-400 font-normal mt-0.5">
+          <div className="text-[11px] text-slate-400 font-normal mt-0.5">
             هدف تعیین‌شده: {target.toLocaleString('fa-IR')}٪
           </div>
         </div>
       </div>
 
       {/* Details Footer */}
-      <div className="pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-normal text-slate-500">
+      <div className="pt-2.5 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5 text-xs font-normal text-slate-500">
         <div className="flex items-center gap-1.5 text-green-700">
-          <CheckCircle2 className="w-4 h-4 text-green-600" />
+          <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
           <span>مطابق شاخص استاندارد</span>
         </div>
         <span className="text-slate-400">میانگین: ۱.۴ ساعت</span>

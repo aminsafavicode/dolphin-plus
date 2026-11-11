@@ -404,39 +404,39 @@ export const CatalogView: FC = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 min-w-0">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-600 flex items-center justify-center shadow-sm">
-            <Cpu className="w-6 h-6" />
+      <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-cyan-50 text-cyan-600 flex items-center justify-center shadow-sm shrink-0">
+            <Cpu className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">کاتالوگ جامع تجهیزات و دارایی‌ها (Asset Catalog)</h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900">کاتالوگ جامع تجهیزات و دارایی‌ها (Asset Catalog)</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               مدیریت دسته‌بندی‌های پایه، مدل‌های کاتالوگ سخت‌افزار، دارایی‌های فیزیکی و شناسه‌های یکتا (IMEI، سریال، MAC)
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             onClick={() => handleOpenTypeModal()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all whitespace-nowrap cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>دسته‌بندی جدید</span>
           </button>
           <button
             onClick={() => handleOpenModelModal()}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all whitespace-nowrap cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>مدل تجهیز جدید</span>
           </button>
           <button
             onClick={handleOpenDeviceModal}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-all"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-500/20 transition-all whitespace-nowrap cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>ثبت دارایی فیزیکی</span>
@@ -464,17 +464,17 @@ export const CatalogView: FC = () => {
       )}
 
       {/* Navigation Tabs and Search */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col @4xl:flex-row @4xl:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setActiveTab('models')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'models'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <Cpu className="w-4 h-4" />
+            <Cpu className="w-4 h-4 shrink-0" />
             <span>مدل‌های سخت‌افزاری</span>
             <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === 'models' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
               {models.length}
@@ -483,13 +483,13 @@ export const CatalogView: FC = () => {
 
           <button
             onClick={() => setActiveTab('types')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'types'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-4 h-4 shrink-0" />
             <span>دسته‌بندی‌های پایه</span>
             <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === 'types' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
               {types.length}
@@ -498,13 +498,13 @@ export const CatalogView: FC = () => {
 
           <button
             onClick={() => setActiveTab('devices')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'devices'
                 ? 'bg-blue-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <Smartphone className="w-4 h-4" />
+            <Smartphone className="w-4 h-4 shrink-0" />
             <span>دارایی‌های فیزیکی و شناسه‌ها</span>
             <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === 'devices' ? 'bg-blue-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
               {devices.length}
@@ -513,7 +513,7 @@ export const CatalogView: FC = () => {
         </div>
 
         {/* Search Input */}
-        <div className="relative w-full sm:w-64">
+        <div className="relative w-full @4xl:w-60 shrink-0">
           <input
             type="text"
             value={searchTerm}
@@ -527,7 +527,7 @@ export const CatalogView: FC = () => {
 
       {/* Tab 1: Hardware Models View */}
       {activeTab === 'models' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 @md:grid-cols-2 @4xl:grid-cols-3 gap-4">
           {filteredModels.length === 0 ? (
             <div className="col-span-full bg-white rounded-xl p-12 text-center text-xs text-slate-400 border border-slate-200">
               {loading ? 'در حال دریافت اطلاعات مدل‌ها...' : 'هیچ مدل سخت‌افزاری در کاتالوگ یافت نشد.'}
@@ -536,7 +536,7 @@ export const CatalogView: FC = () => {
             filteredModels.map((m) => (
               <div
                 key={m.id}
-                className={`bg-white rounded-2xl p-5 border transition-all flex flex-col justify-between ${
+                className={`bg-white rounded-xl p-4 border transition-all flex flex-col justify-between min-w-0 ${
                   m.is_active ? 'border-slate-200/80 shadow-[0_2px_12px_rgba(0,0,0,0.03)] hover:shadow-md' : 'border-slate-200 bg-slate-50/60 opacity-80'
                 }`}
               >
@@ -604,7 +604,7 @@ export const CatalogView: FC = () => {
 
       {/* Tab 2: Base Device Types View */}
       {activeTab === 'types' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="grid grid-cols-1 @md:grid-cols-2 @4xl:grid-cols-3 gap-4">
           {filteredTypes.length === 0 ? (
             <div className="col-span-full bg-white rounded-xl p-12 text-center text-xs text-slate-400 border border-slate-200">
               {loading ? 'در حال دریافت دسته‌بندی‌ها...' : 'هیچ دسته‌بندی پایه‌ای یافت نشد.'}
@@ -613,7 +613,7 @@ export const CatalogView: FC = () => {
             filteredTypes.map((t) => (
               <div
                 key={t.id}
-                className={`bg-white rounded-2xl p-5 border transition-all flex flex-col justify-between ${
+                className={`bg-white rounded-xl p-4 border transition-all flex flex-col justify-between min-w-0 ${
                   t.is_active ? 'border-slate-200/80 shadow-sm hover:shadow-md' : 'border-slate-200 bg-slate-50/60 opacity-80'
                 }`}
               >
@@ -682,8 +682,8 @@ export const CatalogView: FC = () => {
               </div>
               <div className="divide-y divide-slate-100">
                 {filteredDevices.map((d) => (
-                  <div key={d.id} className="p-5 hover:bg-slate-50/50 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div className="space-y-2">
+                  <div key={d.id} className="p-4 hover:bg-slate-50/50 transition-all flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4">
+                    <div className="space-y-2 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-semibold text-slate-900">
                           {d.device_model_brand} {d.device_model_name}
@@ -731,7 +731,7 @@ export const CatalogView: FC = () => {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 self-end @3xl:self-center">
                       <button
                         onClick={() => handleOpenIdentifierModal(d)}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-bold text-xs transition-all border border-indigo-200/60"

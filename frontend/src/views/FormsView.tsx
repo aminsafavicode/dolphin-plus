@@ -905,15 +905,15 @@ export const FormsView: FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 min-w-0 @container">
       {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm no-print">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm">
-            <FileSpreadsheet className="w-6 h-6" />
+      <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm no-print">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-sm shrink-0">
+            <FileSpreadsheet className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">فرم‌ساز پویا و موتور اسناد (Dynamic Form Builder)</h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900">فرم‌ساز پویا و موتور اسناد (Dynamic Form Builder)</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               طراحی فیلدهای داده‌ای، فرمول‌های محاسباتی، جداول اقلام و چیدمان دقیق سند چاپی
             </p>
@@ -921,13 +921,13 @@ export const FormsView: FC = () => {
         </div>
 
         {/* Workflow Switcher & Quick Create */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-2xl">
-            <span className="text-xs font-semibold text-slate-500">انتخاب فرآیند:</span>
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0 max-w-full">
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl min-w-0 max-w-full">
+            <span className="text-xs font-semibold text-slate-500 shrink-0">انتخاب فرآیند:</span>
             <select
               value={selectedWfId || ''}
               onChange={(e) => handleSelectWorkflow(Number(e.target.value))}
-              className="bg-transparent text-xs font-semibold text-slate-900 outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-slate-900 outline-none cursor-pointer min-w-0 truncate"
             >
               {workflows.map((wf) => (
                 <option key={wf.id} value={wf.id}>
@@ -980,9 +980,9 @@ export const FormsView: FC = () => {
       ) : (
         <div className="space-y-6">
           {/* Main Navigation Tabs */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200/80 pb-3 no-print">
+          <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-3 border-b border-slate-200/80 pb-3 no-print">
             {/* Segmented Tab Navigation */}
-            <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/70 overflow-x-auto shrink-0">
+            <div className="flex items-center gap-1 bg-slate-100/90 p-1 rounded-xl border border-slate-200/70 overflow-x-auto max-w-full">
               <button
                 type="button"
                 onClick={() => setActiveTab('designer')}
@@ -1073,8 +1073,8 @@ export const FormsView: FC = () => {
                       className="bg-white rounded-xl border border-slate-200/80 shadow-sm overflow-hidden"
                     >
                       {/* Section Header */}
-                      <div className="p-4 px-6 bg-slate-50/70 border-b border-slate-200 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                      <div className="p-3.5 px-4 bg-slate-50/70 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
                           <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 font-semibold text-xs flex items-center justify-center">
                             #{sec.id}
                           </div>
@@ -1123,7 +1123,7 @@ export const FormsView: FC = () => {
                         </div>
                       </div>
 
-                      <div className="p-6 space-y-6">
+                      <div className="p-4 space-y-5">
                         {/* Regular Fields List */}
                         <div>
                           <div className="text-xs font-bold text-slate-500 mb-3 flex items-center justify-between">
@@ -1135,7 +1135,7 @@ export const FormsView: FC = () => {
                               هنوز فیلد معمولی در این بخش ثبت نشده است.
                             </div>
                           ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-4">
                               {regularFields.map((f: any) => (
                                 <div
                                   key={f.id}
@@ -1302,7 +1302,7 @@ export const FormsView: FC = () => {
                                         هنوز ستونی برای این جدول ایجاد نشده است. روی «ستون جدید» کلیک کنید.
                                       </div>
                                     ) : (
-                                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                                      <div className="grid grid-cols-1 @sm:grid-cols-2 @3xl:grid-cols-3 @5xl:grid-cols-4 gap-2.5">
                                         {groupCols.map((c: any) => (
                                           <div
                                             key={c.id}
@@ -1360,8 +1360,8 @@ export const FormsView: FC = () => {
           {/* TAB 2: Interactive Live Preview & Formula Evaluator */}
           {/* ----------------------------------------------------------- */}
           {activeTab === 'preview' && (
-            <div className="bg-white rounded-xl p-7 border border-slate-200/80 shadow-sm space-y-7">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+            <div className="bg-white rounded-xl p-4 @3xl:p-5 border border-slate-200/80 shadow-sm space-y-5">
+              <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between pb-3 border-b border-slate-100 gap-3">
                 <div>
                   <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                     <Calculator className="w-4 h-4 text-purple-600" />
@@ -1410,7 +1410,7 @@ export const FormsView: FC = () => {
                       </div>
 
                       {/* Regular Fields Grid */}
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 @2xl:grid-cols-2 gap-4">
                         {regularFields.map((f: any) => (
                           <div key={f.id} className="space-y-1">
                             <label className="block text-xs font-bold text-slate-700">
@@ -1635,10 +1635,10 @@ export const FormsView: FC = () => {
           {activeTab === 'print' && (
             <div className="space-y-6">
               {/* Header Action Bar */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
-                <div>
+              <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4 no-print">
+                <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                    <Printer className="w-4 h-4 text-blue-600" />
+                    <Printer className="w-4 h-4 text-blue-600 shrink-0" />
                     <span>موتور خروجی چاپی و چیدمان دقیق فیلدها در برگه رسمی</span>
                   </h3>
                   <p className="text-xs text-slate-400 mt-0.5">
@@ -1646,7 +1646,7 @@ export const FormsView: FC = () => {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     onClick={() => handleSavePrintSettings()}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition-all cursor-pointer"
@@ -1666,9 +1666,9 @@ export const FormsView: FC = () => {
               </div>
 
               {/* Grid 2 Columns: Right = Layout Settings, Left = Live Printable Sheet */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="grid grid-cols-1 @5xl:grid-cols-12 gap-5 items-start">
                 {/* Right Column: Settings & Precision Field Customizer */}
-                <div className="lg:col-span-5 space-y-5 no-print">
+                <div className="@5xl:col-span-5 space-y-4 min-w-0 no-print">
                   {/* General Print Settings Box */}
                   <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm space-y-4">
                     <div className="pb-2.5 border-b border-slate-100 flex items-center justify-between">
@@ -1933,7 +1933,7 @@ export const FormsView: FC = () => {
                 </div>
 
                 {/* Left Column: Live High-Fidelity Printable Sheet (Window Print Canvas) */}
-                <div className="lg:col-span-7 bg-slate-200/70 p-4 rounded-xl border border-slate-300/80 flex flex-col items-center justify-center print-page-wrapper">
+                <div className="@5xl:col-span-7 min-w-0 overflow-x-auto bg-slate-200/70 p-4 rounded-xl border border-slate-300/80 flex flex-col items-center justify-center print-page-wrapper">
                   <span className="text-xs font-bold text-slate-600 mb-3 no-print">
                     پیش‌نمایش خروجی چاپ سند ({printPageSize} - {printOrientation === 'PORTRAIT' ? 'عمودی' : 'افقی'})
                   </span>

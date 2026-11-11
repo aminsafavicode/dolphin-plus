@@ -538,14 +538,14 @@ export const WorkflowsView: FC = () => {
 
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 min-w-0 @container">
       {/* View Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-200/80 text-blue-600 flex items-center justify-center shrink-0">
             <GitBranch className="w-5 h-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className="text-base font-semibold text-slate-800">میز کار فرآیندها و گراف ماشین وضعیت</h2>
             <p className="text-xs text-slate-400 font-normal mt-0.5">
               مدل‌سازی گرافیکی جریان کار (State Machine)، گام‌ها، تحویل‌های فیزیکی و تیم اجرایی
@@ -554,10 +554,10 @@ export const WorkflowsView: FC = () => {
         </div>
 
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           <button
             onClick={() => handleOpenWfModal()}
-            className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs shadow-xs transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium text-xs shadow-xs transition-colors cursor-pointer whitespace-nowrap"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>تعریف فرآیند جدید</span>
@@ -587,12 +587,12 @@ export const WorkflowsView: FC = () => {
 
 
       {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 @5xl:grid-cols-4 gap-5 items-start">
         {/* Left Column: Workflows Sidebar */}
-        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col space-y-3">
-          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100">
-            <span className="text-xs font-medium text-slate-700">فرآیندها ({filteredWorkflows.length})</span>
-            <div className="relative w-28">
+        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col space-y-3 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+            <span className="text-xs font-medium text-slate-700 shrink-0">فرآیندها ({filteredWorkflows.length})</span>
+            <div className="relative flex-1 min-w-[110px] max-w-36">
               <input
                 type="text"
                 value={searchTerm}
@@ -623,11 +623,11 @@ export const WorkflowsView: FC = () => {
                         : 'bg-white border-slate-200/80 hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="text-xs font-medium text-slate-800">{wf.name}</h4>
-                          <span className="text-xs font-mono text-slate-500 bg-slate-100 px-1 py-0.2 rounded border border-slate-200">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <h4 className="text-xs font-medium text-slate-800 truncate">{wf.name}</h4>
+                          <span className="text-[11px] font-mono text-slate-500 bg-slate-100 px-1 py-0.5 rounded border border-slate-200">
                             {wf.code}
                           </span>
                         </div>
@@ -674,12 +674,12 @@ export const WorkflowsView: FC = () => {
 
 
         {/* Right 3 Columns: Selected Workflow Studio */}
-        <div className="lg:col-span-3 space-y-5">
+        <div className="@5xl:col-span-3 space-y-5 min-w-0 @container">
           {selectedWf ? (
             <>
               {/* Studio Header Card */}
-              <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div>
+              <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-3">
+                <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-700 font-mono text-xs font-normal border border-slate-200">
                       ID: #{selectedWf.id}
@@ -784,9 +784,9 @@ export const WorkflowsView: FC = () => {
               {/* TAB 1: Clean Visual State Machine Flow */}
               {/* --------------------------------------------------------- */}
               {activeTab === 'graph' && (
-                <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs space-y-4">
+                <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs space-y-4 min-w-0">
                   {/* Top Bar with situational awareness metrics */}
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+                  <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-3 pb-3 border-b border-slate-100">
                     <div>
                       <h4 className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                         <Sparkles className="w-4 h-4 text-blue-600" />
@@ -820,7 +820,7 @@ export const WorkflowsView: FC = () => {
                       هنوز مرحله‌ای تعریف نشده است. با کلیک روی «افزودن مرحله»، گام‌های فرآیند را بسازید.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 @2xl:grid-cols-2 @5xl:grid-cols-3 gap-4">
                       {steps.map((st, idx) => {
                         const outgoing = transitions.filter((t) => t.from_step === st.id);
                         const incoming = transitions.filter((t) => t.to_step === st.id);
@@ -986,8 +986,8 @@ export const WorkflowsView: FC = () => {
               {/* TAB 2: Steps / Stages Management */}
               {/* --------------------------------------------------------- */}
               {activeTab === 'steps' && (
-                <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs space-y-4 min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
                     <div>
                       <h4 className="text-xs font-semibold text-slate-800">
                         مراحل و گام‌های فرآیند ({steps.length})
@@ -1017,7 +1017,7 @@ export const WorkflowsView: FC = () => {
                       steps.map((st, idx) => (
                         <div
                           key={st.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-colors gap-3"
+                          className="flex flex-col @2xl:flex-row @2xl:items-center justify-between p-3.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-colors gap-3"
                         >
                           <div className="flex items-center gap-3">
                             <div className="flex flex-col items-center gap-0.5">
@@ -1077,7 +1077,7 @@ export const WorkflowsView: FC = () => {
                           </div>
 
 
-                          <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                          <div className="flex items-center gap-1 shrink-0 self-end @2xl:self-center">
                             <button
                               onClick={() => handleOpenStepModal(st)}
                               className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
@@ -1105,8 +1105,8 @@ export const WorkflowsView: FC = () => {
               {/* TAB 3: Transitions Management */}
               {/* --------------------------------------------------------- */}
               {activeTab === 'transitions' && (
-                <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs space-y-4">
-                  <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs space-y-4 min-w-0">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
                     <div>
                       <h4 className="text-xs font-semibold text-slate-800">
                         گذارهای انتقال ماشین وضعیت ({transitions.length})
@@ -1136,7 +1136,7 @@ export const WorkflowsView: FC = () => {
                       transitions.map((tr) => (
                         <div
                           key={tr.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-colors gap-3"
+                          className="flex flex-col @2xl:flex-row @2xl:items-center justify-between p-3.5 rounded-xl bg-white border border-slate-200 hover:border-slate-300 transition-colors gap-3"
                         >
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -1170,7 +1170,7 @@ export const WorkflowsView: FC = () => {
                           </div>
 
 
-                          <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                          <div className="flex items-center gap-1 shrink-0 self-end @2xl:self-center">
                             <button
                               onClick={() => handleOpenTransModal(tr)}
                               className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
@@ -1200,8 +1200,8 @@ export const WorkflowsView: FC = () => {
               {activeTab === 'team' && (
                 <div className="space-y-5">
                   {/* Sub-tab Navigation */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-2.5">
-                    <div className="flex items-center gap-1.5">
+                  <div className="flex flex-col @2xl:flex-row @2xl:items-center justify-between gap-3 border-b border-slate-200 pb-2.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
                       <button
                         onClick={() => setTeamSubTab('matrix')}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-colors cursor-pointer ${

@@ -418,15 +418,15 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
   const selectedUserObj = matrixData?.selected_user;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 min-w-0 @container">
       {/* Top Banner */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <ShieldCheck className="w-6 h-6" />
+      <div className="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
+            <ShieldCheck className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900">
               ماتریس امنیت و کنترل دسترسی فرآیندها (Access Control Matrix)
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -436,14 +436,14 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
         </div>
 
         {/* Workflow Selector */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-2 rounded-2xl">
-            <GitBranch className="w-4 h-4 text-slate-400" />
-            <span className="text-xs font-semibold text-slate-500">انتخاب فرآیند:</span>
+        <div className="flex items-center gap-2 shrink-0 max-w-full">
+          <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl min-w-0 max-w-full">
+            <GitBranch className="w-4 h-4 text-slate-400 shrink-0" />
+            <span className="text-xs font-semibold text-slate-500 shrink-0">انتخاب فرآیند:</span>
             <select
               value={selectedWfId || ''}
               onChange={(e) => handleSelectWorkflow(Number(e.target.value))}
-              className="bg-transparent text-xs font-semibold text-slate-900 outline-none cursor-pointer"
+              className="bg-transparent text-xs font-semibold text-slate-900 outline-none cursor-pointer min-w-0 truncate"
             >
               {workflows.map((wf) => (
                 <option key={wf.id} value={wf.id}>
@@ -475,10 +475,10 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
       )}
 
       {/* Context Selection Panel: Subject & Step */}
-      <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs space-y-4">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+      <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs space-y-4">
+        <div className="grid grid-cols-1 @4xl:grid-cols-12 gap-4 items-start">
           {/* 1. Subject Selector (User vs Role) */}
-          <div className="lg:col-span-6 space-y-2.5">
+          <div className="@4xl:col-span-6 space-y-2.5 min-w-0">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                 <Users className="w-4 h-4 text-blue-600" />
@@ -542,7 +542,7 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
 
             {/* If Subject == Role */}
             {subjectType === 'role' && (
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 @sm:grid-cols-3 gap-2">
                 {[
                   { value: 'EXECUTOR', label: 'مجری فرآیند' },
                   { value: 'VIEWER', label: 'مشاهده‌کننده' },
@@ -566,7 +566,7 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
           </div>
 
           {/* 2. Step Selector */}
-          <div className="lg:col-span-6 space-y-2.5">
+          <div className="@4xl:col-span-6 space-y-2.5 min-w-0">
             <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
               <Layers className="w-4 h-4 text-blue-600" />
               <span>مرحله فرآیند (تنظیم دسترسی در این گام):</span>
@@ -603,7 +603,7 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
         </div>
 
         {/* Quick Presets Bar */}
-        <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+        <div className="pt-3 border-t border-slate-100 flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-2.5">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-medium text-slate-500 ml-1">الگوهای اعمال سریع:</span>
             <button
@@ -695,9 +695,9 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
       {activeMatrixTab === 'fields' && (
         <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs space-y-4">
           {/* Search, Section Filter & Quick Bulk Actions */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div className="flex items-center gap-2 flex-1 max-w-md">
-              <div className="relative flex-1">
+          <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+            <div className="flex flex-wrap items-center gap-2 flex-1 min-w-0 @3xl:max-w-lg">
+              <div className="relative flex-1 min-w-[180px]">
                 <input
                   type="text"
                   placeholder="جستجو در فیلدها با نام، کد یا بخش..."
@@ -709,7 +709,7 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
               </div>
 
               {/* Section Filter */}
-              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 shrink-0">
+              <div className="flex items-center gap-1 overflow-x-auto pb-0.5 max-w-full">
                 <button
                   type="button"
                   onClick={() => setSelectedSectionFilter('ALL')}
@@ -910,7 +910,7 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
                 return (
                   <div
                     key={grp.id}
-                    className="p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3"
+                    className="p-3.5 bg-slate-50/70 border border-slate-200/80 rounded-xl flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-3"
                   >
                     <div>
                       <div className="flex items-center gap-2">
@@ -993,9 +993,9 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
       {/* TAB 3: WORKFLOW ACTIONS & TRANSITIONS PERMISSIONS */}
       {/* ============================================================= */}
       {activeMatrixTab === 'actions' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        <div className="grid grid-cols-1 @3xl:grid-cols-2 gap-4">
           {/* General Workflow Actions Card */}
-          <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs space-y-3.5">
+          <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs space-y-3.5 min-w-0">
             <div className="pb-2.5 border-b border-slate-100">
               <h4 className="text-xs font-semibold text-slate-900">مجوزهای کلی سطح فرآیند</h4>
               <p className="text-[11px] text-slate-400 mt-0.5">اختیارات کاربر یا نقش نسبت به کل چرخه فرآیند</p>
@@ -1031,7 +1031,7 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
           </div>
 
           {/* Step Actions & Allowed Transitions */}
-          <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-xs space-y-3.5">
+          <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-xs space-y-3.5 min-w-0">
             <div className="pb-2.5 border-b border-slate-100">
               <h4 className="text-xs font-semibold text-slate-900">
                 مجوزهای این مرحله و گذارهای مجاز ({selectedStepObj?.name || 'مرحله'})
@@ -1112,9 +1112,9 @@ export const AccessMatrixView: FC<AccessMatrixViewProps> = ({
       )}
 
       {/* Sticky Bottom Save Bar */}
-      <div className="sticky bottom-4 z-20 bg-slate-900/90 backdrop-blur-md text-white p-4 px-6 rounded-xl shadow-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-blue-600/30 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
+      <div className="sticky bottom-4 z-20 bg-slate-900/90 backdrop-blur-md text-white p-3.5 px-4 rounded-xl shadow-2xl flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-3 border border-slate-800">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-blue-600/30 text-blue-400 border border-blue-500/30 flex items-center justify-center shrink-0">
             <Save className="w-5 h-5" />
           </div>
           <div>

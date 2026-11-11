@@ -15,8 +15,9 @@
 }
 
 html {
-  font-size: 17px;
+  font-size: 14px;
   -webkit-text-size-adjust: 100%;
+  overflow-x: clip;
 }
 
 * {
@@ -30,7 +31,8 @@ body {
   margin: 0;
   background-color: #f8fafc;
   color: #0f172a;
-  line-height: 1.7;
+  line-height: 1.6;
+  overflow-x: clip;
   -webkit-font-smoothing: antialiased;
 }
 

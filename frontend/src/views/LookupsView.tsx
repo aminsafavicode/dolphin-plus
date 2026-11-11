@@ -423,26 +423,26 @@ export const LookupsView: FC = () => {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 min-w-0">
       {/* Header Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200/80 shadow-sm">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shadow-sm">
-            <Database className="w-6 h-6" />
+      <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shadow-sm shrink-0">
+            <Database className="w-5 h-5" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-slate-900">منابع داده و لغت‌نامه‌ها (Data Sources & Lookups)</h2>
+          <div className="min-w-0">
+            <h2 className="text-base font-semibold text-slate-900">منابع داده و لغت‌نامه‌ها (Data Sources & Lookups)</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               مدیریت لیست‌های داده‌ای سلسله‌مراتبی، گزینه‌های آبشاری (Parent/Child) و مقادیر ثابت فرم‌های هوشمند
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
           {activeTab === 'lookups' ? (
             <button
               onClick={() => handleOpenLookupModal()}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md shadow-amber-500/20 transition-all whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>منبع داده پویا جدید</span>
@@ -450,7 +450,7 @@ export const LookupsView: FC = () => {
           ) : (
             <button
               onClick={() => handleOpenStaticModal()}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-md shadow-indigo-500/20 transition-all whitespace-nowrap cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>مجموعه ثابت جدید</span>
@@ -479,17 +479,17 @@ export const LookupsView: FC = () => {
       )}
 
       {/* Tabs and Search Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 pb-3">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col @4xl:flex-row @4xl:items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap items-center gap-1.5">
           <button
             onClick={() => setActiveTab('lookups')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'lookups'
                 ? 'bg-amber-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <GitBranch className="w-4 h-4" />
+            <GitBranch className="w-4 h-4 shrink-0" />
             <span>لیست‌های پویا و آبشاری (Lookups)</span>
             <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === 'lookups' ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
               {lookups.length}
@@ -498,13 +498,13 @@ export const LookupsView: FC = () => {
 
           <button
             onClick={() => setActiveTab('static')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'static'
                 ? 'bg-indigo-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-100'
             }`}
           >
-            <Layers className="w-4 h-4" />
+            <Layers className="w-4 h-4 shrink-0" />
             <span>مجموعه گزینه‌های ثابت (Static Choices)</span>
             <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === 'static' ? 'bg-indigo-700 text-white' : 'bg-slate-200 text-slate-700'}`}>
               {staticSets.length}
@@ -513,7 +513,7 @@ export const LookupsView: FC = () => {
         </div>
 
         {/* Search */}
-        <div className="relative w-full sm:w-64">
+        <div className="relative w-full @4xl:w-60 shrink-0">
           <input
             type="text"
             value={searchTerm}
@@ -529,9 +529,9 @@ export const LookupsView: FC = () => {
       {/* TAB 1: Dynamic Hierarchical Lookups */}
       {/* ------------------------------------------------------------- */}
       {activeTab === 'lookups' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-5">
           {/* Lists Column */}
-          <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm space-y-3">
+          <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm space-y-3 min-w-0">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <span className="text-xs font-bold text-slate-700">لیست‌های پویا ({filteredLookups.length})</span>
               <ListFilter className="w-3.5 h-3.5 text-slate-400" />
@@ -597,10 +597,10 @@ export const LookupsView: FC = () => {
           </div>
 
           {/* Items Detail Column */}
-          <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-slate-200/80 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-              <div>
-                <div className="flex items-center gap-2">
+          <div className="@4xl:col-span-2 bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm space-y-4 min-w-0">
+            <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-semibold text-slate-900">
                     {selectedLookup ? `گزینه‌های «${selectedLookup.name}»` : 'انتخاب منبع داده'}
                   </h3>
@@ -618,7 +618,7 @@ export const LookupsView: FC = () => {
               {selectedLookup && (
                 <button
                   onClick={() => handleOpenLookupItemModal()}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all self-start sm:self-auto"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all self-start @3xl:self-auto shrink-0 whitespace-nowrap cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>افزودن گزینه جدید</span>
@@ -693,9 +693,9 @@ export const LookupsView: FC = () => {
       {/* TAB 2: Static Choice Sets */}
       {/* ------------------------------------------------------------- */}
       {activeTab === 'static' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-5">
           {/* Static Sets Column */}
-          <div className="bg-white rounded-xl p-5 border border-slate-200/80 shadow-sm space-y-3">
+          <div className="bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm space-y-3 min-w-0">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <span className="text-xs font-bold text-slate-700">مجموعه‌های ثابت ({filteredStaticSets.length})</span>
               <Layers className="w-3.5 h-3.5 text-slate-400" />
@@ -752,10 +752,10 @@ export const LookupsView: FC = () => {
           </div>
 
           {/* Static Items Detail Column */}
-          <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-slate-200/80 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
-              <div>
-                <div className="flex items-center gap-2">
+          <div className="@4xl:col-span-2 bg-white rounded-xl p-4 border border-slate-200/80 shadow-sm space-y-4 min-w-0">
+            <div className="flex flex-col @3xl:flex-row @3xl:items-center justify-between pb-3 border-b border-slate-100 gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-semibold text-slate-900">
                     {selectedStaticSet ? `گزینه‌های ثابت «${selectedStaticSet.name}»` : 'انتخاب مجموعه'}
                   </h3>
@@ -771,7 +771,7 @@ export const LookupsView: FC = () => {
               {selectedStaticSet && (
                 <button
                   onClick={() => handleOpenStaticItemModal()}
-                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all self-start sm:self-auto"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-sm transition-all self-start @3xl:self-auto shrink-0 whitespace-nowrap cursor-pointer"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   <span>افزودن گزینه ثابت</span>

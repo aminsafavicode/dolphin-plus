@@ -21,7 +21,14 @@ import { CheckCircle } from 'lucide-react';
 import { api } from './api/client';
 
 export function App() {
-  const [currentView, setCurrentView] = useState('dashboard');
+  const [currentView, setCurrentView] = useState(() => {
+    try {
+      const view = new URLSearchParams(window.location.search).get('view');
+      return view || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [dashboardStats, setDashboardStats] = useState<any | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -193,12 +200,12 @@ export function App() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] flex flex-row text-slate-800 font-sans" dir="rtl">
+    <div className="min-h-screen bg-[#f8fafc] flex flex-row text-slate-800 font-sans overflow-x-clip" dir="rtl">
       {/* Toast Alert Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 left-6 z-50 bg-slate-900 text-white text-xs font-normal px-4 py-2.5 rounded-lg shadow-lg border border-slate-800 flex items-center gap-2">
+        <div className="fixed bottom-5 left-5 z-50 bg-slate-900 text-white text-xs font-normal px-3.5 py-2.5 rounded-lg shadow-lg border border-slate-800 flex items-center gap-2 max-w-[calc(100vw-2.5rem)]">
           <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
+          <span className="truncate">{toastMessage}</span>
         </div>
       )}
 
@@ -212,7 +219,7 @@ export function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 @container">
         {/* Top Header */}
         <Header
           onOpenNewProcess={() => setIsNewProcessOpen(true)}
@@ -227,7 +234,7 @@ export function App() {
         />
 
         {/* Scrollable Views */}
-        <main className="flex-1 p-6 overflow-y-auto space-y-6">
+        <main className="flex-1 p-4 @3xl:p-5 space-y-5 min-w-0">
           {/* 1. Dashboard View */}
           {currentView === 'dashboard' && (
             <>
@@ -239,21 +246,21 @@ export function App() {
                 totalInstances={dashboardStats?.total_instances}
               />
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
+              <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-5">
+                <div className="@4xl:col-span-2 min-w-0">
                   <WeeklyVolumeChart
                     data={dashboardStats?.weekly_volume}
                     totalInstances={dashboardStats?.total_instances}
                     completedCount={dashboardStats?.completed_count}
                   />
                 </div>
-                <div className="lg:col-span-1">
+                <div className="@4xl:col-span-1 min-w-0">
                   <SlaGaugeCard rate={dashboardStats?.sla_rate ?? 100} target={95} />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div className="lg:col-span-2">
+              <div className="grid grid-cols-1 @4xl:grid-cols-3 gap-5">
+                <div className="@4xl:col-span-2 min-w-0">
                   <LiveCartableTable
                     tasks={tasks}
                     onAcceptHandoff={handleAcceptHandoff}
@@ -262,7 +269,7 @@ export function App() {
                     searchFilter={searchQuery}
                   />
                 </div>
-                <div className="lg:col-span-1">
+                <div className="@4xl:col-span-1 min-w-0">
                   <RecentActivityWidget activities={dashboardStats?.recent_activities || []} />
                 </div>
               </div>
@@ -282,8 +289,8 @@ export function App() {
 
           {/* 3. Pending Handoff Dedicated View */}
           {currentView === 'pending_handoff' && (
-            <div className="space-y-6">
-              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-xs text-amber-800">
+            <div className="space-y-5 min-w-0">
+              <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-800">
                 <strong>پروتکل تحویل فیزیکی دستگاه (Dual-Handoff):</strong> در این بخش پرونده‌هایی که از مراحل قبلی ارسال شده ولی هنوز تایید یا رد فیزیکی نشده‌اند نمایش داده می‌شوند.
               </div>
               <LiveCartableTable

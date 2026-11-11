@@ -16,9 +16,9 @@ export const RecentActivityWidget: FC<ActivityProps> = ({ activities }) => {
   const displayActivities = activities || [];
 
   return (
-    <div className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between h-full">
+    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between h-full min-w-0">
       {/* Header */}
-      <div className="flex items-center justify-between mb-3.5">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
           <History className="w-4 h-4 text-slate-500" />
           <h3 className="text-sm font-semibold text-slate-800">رویدادهای زنده سیستم</h3>

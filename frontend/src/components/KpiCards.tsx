@@ -61,26 +61,26 @@ export const KpiCards: FC<KpiCardsProps> = ({
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 @md:grid-cols-2 @5xl:grid-cols-4 gap-4">
       {cards.map((c, idx) => {
         const Icon = c.icon;
         return (
           <div
             key={idx}
-            className="bg-white rounded-xl p-5 border border-slate-200 shadow-xs flex flex-col justify-between"
+            className="bg-white rounded-xl p-4 border border-slate-200 shadow-xs flex flex-col justify-between min-w-0"
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-slate-500">
+            <div className="flex items-center justify-between gap-2 mb-2.5">
+              <span className="text-xs font-medium text-slate-500 truncate">
                 {c.title}
               </span>
-              <div className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-500">
-                <Icon className="w-4 h-4" />
+              <div className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200/60 flex items-center justify-center text-slate-500 shrink-0">
+                <Icon className="w-3.5 h-3.5" />
               </div>
             </div>
 
-            <div className="mb-3">
+            <div className="mb-2.5">
               <div className="flex items-baseline gap-1.5">
-                <span className="text-2xl font-semibold text-slate-800 tracking-tight">
+                <span className="text-xl font-semibold text-slate-800 tracking-tight">
                   {c.value}
                 </span>
                 {c.unit && (
@@ -89,16 +89,16 @@ export const KpiCards: FC<KpiCardsProps> = ({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400 font-normal mt-0.5">
+              <p className="text-xs text-slate-400 font-normal mt-0.5 truncate">
                 {c.subValue}
               </p>
             </div>
 
-            <div className="pt-2.5 border-t border-slate-100 flex items-center justify-between">
-              <span className={`text-xs font-medium px-2 py-0.5 rounded-md ${c.badgeStyle}`}>
+            <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5">
+              <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${c.badgeStyle}`}>
                 {c.badge}
               </span>
-              <span className="text-xs text-slate-400 font-normal">بروزرسانی لحظه‌ای</span>
+              <span className="text-[11px] text-slate-400 font-normal">بروزرسانی لحظه‌ای</span>
             </div>
           </div>
         );

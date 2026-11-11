@@ -42,10 +42,10 @@ export const LiveCartableTable: FC<CartableTableProps> = ({
   });
 
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden min-w-0 @container">
       {/* Table Header with Tabs */}
-      <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div>
+      <div className="p-4 border-b border-slate-100 flex flex-col @4xl:flex-row @4xl:items-center justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-sm font-semibold text-slate-800">
             کارتابل نظارتی پرونده‌ها
           </h2>
@@ -55,10 +55,10 @@ export const LiveCartableTable: FC<CartableTableProps> = ({
         </div>
 
         {/* Tab Filters */}
-        <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-200/60 text-xs">
+        <div className="flex flex-wrap items-center gap-1 bg-slate-50 p-1 rounded-lg border border-slate-200/60 text-xs max-w-full">
           <button
             onClick={() => setActiveTab('all')}
-            className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === 'all'
                 ? 'bg-white text-blue-700 font-medium shadow-xs'
                 : 'text-slate-500 hover:text-slate-800 font-normal'
@@ -68,7 +68,7 @@ export const LiveCartableTable: FC<CartableTableProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('my')}
-            className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === 'my'
                 ? 'bg-white text-blue-700 font-medium shadow-xs'
                 : 'text-slate-500 hover:text-slate-800 font-normal'
@@ -78,7 +78,7 @@ export const LiveCartableTable: FC<CartableTableProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('pending')}
-            className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === 'pending'
                 ? 'bg-amber-50 text-amber-700 font-medium border border-amber-200/60'
                 : 'text-slate-500 hover:text-amber-700 font-normal'
@@ -88,7 +88,7 @@ export const LiveCartableTable: FC<CartableTableProps> = ({
           </button>
           <button
             onClick={() => setActiveTab('completed')}
-            className={`px-3 py-1 rounded-md transition-colors cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer whitespace-nowrap ${
               activeTab === 'completed'
                 ? 'bg-white text-blue-700 font-medium shadow-xs'
                 : 'text-slate-500 hover:text-slate-800 font-normal'

@@ -57,8 +57,8 @@ export const Header: FC<HeaderProps> = ({
       onSelectUser(u);
     }
     setIsUserDropdownOpen(false);
-    // Open dedicated Operator Portal on port 5174 for this user
-    window.open(`http://${window.location.hostname}:5174/?userId=${u.id}`, '_blank');
+    // Open dedicated Operator Portal for this user on same origin
+    window.open(`/operator/?userId=${u.id}`, '_blank');
   };
 
   const filteredUsers = usersList.filter((u) => {
@@ -92,86 +92,86 @@ export const Header: FC<HeaderProps> = ({
     : 'م‌ا';
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200/80 px-6 flex items-center justify-between sticky top-0 z-20">
+    <header className="h-14 bg-white border-b border-slate-200/80 px-3 @3xl:px-5 flex items-center justify-between gap-2.5 sticky top-0 z-20 min-w-0">
       {/* Title & Search */}
-      <div className="flex items-center gap-4 flex-1 max-w-2xl">
+      <div className="flex items-center gap-2.5 @3xl:gap-3 flex-1 min-w-0">
         {onToggleSidebar && (
           <button
             type="button"
             onClick={onToggleSidebar}
             title={isSidebarCollapsed ? 'باز کردن سایدبار' : 'بستن سایدبار'}
-            className="p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/80 transition-colors cursor-pointer shrink-0"
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 border border-slate-200/80 transition-colors cursor-pointer shrink-0"
           >
             <Menu className="w-4 h-4" />
           </button>
         )}
-        <div className="flex flex-col shrink-0 min-w-0">
+        <div className="flex flex-col min-w-0 shrink">
           <h1 className="text-sm font-bold text-slate-900 leading-tight truncate">
             {activeTitle.title}
           </h1>
-          <span className="text-[11px] text-slate-400 font-normal truncate">
+          <span className="text-[11px] text-slate-400 font-normal truncate hidden @3xl:block">
             {activeTitle.subtitle}
           </span>
         </div>
-        <div className="relative w-full max-w-xs mr-3 hidden sm:block">
-          <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="relative flex-1 max-w-44 @5xl:max-w-xs mr-1 hidden @2xl:block min-w-0">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="جستجو در پرونده‌ها، شناسه، کد پیگیری..."
-            className="w-full h-9 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-xs text-slate-800 placeholder-slate-400 pr-9 pl-3 rounded-lg border border-slate-200 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors outline-none font-normal"
+            className="w-full h-8 bg-slate-50 hover:bg-slate-100/60 focus:bg-white text-xs text-slate-800 placeholder-slate-400 pr-8 pl-2.5 rounded-lg border border-slate-200 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 transition-colors outline-none font-normal"
           />
         </div>
       </div>
 
       {/* Right Controls */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 shrink-0">
         {/* Live Core Engine Status Badge */}
-        <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200/50">
+        <div className="hidden @6xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-700 text-xs font-medium border border-emerald-200/50 whitespace-nowrap">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
           <span>هسته برخط</span>
         </div>
 
-        {/* Open Dedicated Operator Portal (Port 5174) */}
+        {/* Open Dedicated Operator Portal */}
         <a
-          href={`http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:5174/`}
+          href="/operator/"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-1.5 h-9 px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 text-xs font-semibold shadow-2xs transition-colors cursor-pointer"
-          title="باز کردن پورتال اختصاصی اپراتورها روی پورت ۵۱۷۴"
+          className="flex items-center gap-1.5 h-8 px-2.5 @3xl:px-3 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 text-xs font-semibold shadow-2xs transition-colors cursor-pointer whitespace-nowrap"
+          title="باز کردن پورتال اختصاصی اپراتورها"
         >
-          <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-          <span>پورتال اپراتورها (۵۱۷۴)</span>
-          <ExternalLink className="w-3 h-3 text-emerald-600" />
+          <UserCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+          <span className="hidden @4xl:inline">پورتال اپراتورها</span>
+          <ExternalLink className="w-3 h-3 text-emerald-600 shrink-0" />
         </a>
 
         {/* Primary New Process Button */}
         <button
           onClick={onOpenNewProcess}
-          className="flex items-center gap-1.5 h-9 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-xs transition-colors cursor-pointer"
+          className="flex items-center gap-1.5 h-8 px-2.5 @3xl:px-3 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium shadow-xs transition-colors cursor-pointer whitespace-nowrap"
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span>شروع فرآیند جدید</span>
+          <Plus className="w-3.5 h-3.5 shrink-0" />
+          <span className="hidden @xl:inline">شروع فرآیند جدید</span>
         </button>
 
-        <div className="h-5 w-px bg-slate-200" />
+        <div className="h-5 w-px bg-slate-200 hidden @lg:block" />
 
         {/* User Profile Pill with Switcher */}
-        <div className="relative">
+        <div className="relative shrink-0">
           <button
             onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
-            className="flex items-center gap-2 h-9 pr-1.5 pl-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer text-xs"
+            className="flex items-center gap-1.5 h-8 pr-1 pl-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 transition-colors cursor-pointer text-xs"
             title="ورود به کارتابل پرسنل"
           >
-            <div className="w-7 h-7 rounded-md bg-blue-50 text-blue-700 font-semibold flex items-center justify-center text-xs border border-blue-200/60">
+            <div className="w-6 h-6 rounded-md bg-blue-50 text-blue-700 font-semibold flex items-center justify-center text-[11px] border border-blue-200/60 shrink-0">
               {initials}
             </div>
-            <div className="hidden sm:block text-right">
-              <span className="font-medium text-slate-800 leading-tight block">{displayName}</span>
-              <span className="text-xs text-slate-400 font-normal leading-tight block">{displayRole}</span>
+            <div className="hidden @lg:block text-right max-w-28 min-w-0">
+              <span className="font-medium text-slate-800 leading-tight block truncate">{displayName}</span>
+              <span className="text-[11px] text-slate-400 font-normal leading-tight block truncate">{displayRole}</span>
             </div>
-            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform ${isUserDropdownOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform shrink-0 ${isUserDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
           {/* User Switcher Dropdown */}
@@ -184,7 +184,7 @@ export const Header: FC<HeaderProps> = ({
               />
 
               <div
-                className="absolute left-0 top-full mt-1.5 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-slate-200/90 z-50 overflow-hidden text-right"
+                className="absolute left-0 top-full mt-1.5 w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-white rounded-xl shadow-xl border border-slate-200/90 z-50 overflow-hidden text-right"
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* Header */}
@@ -232,7 +232,7 @@ export const Header: FC<HeaderProps> = ({
                         ? 'مدیر ارشد'
                         : u.job?.name || (u.is_staff ? 'کارشناس' : 'اپراتور');
                       const isCurrent = currentUser?.id === u.id;
-                      const impersonateUrl = `http://${window.location.hostname}:8000/accounts/impersonate/${u.id}/`;
+                      const impersonateUrl = `/accounts/impersonate/${u.id}/`;
 
                       return (
                         <div
@@ -300,7 +300,7 @@ export const Header: FC<HeaderProps> = ({
                 {/* Footer Links */}
                 <div className="p-2 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-2">
                   <a
-                    href={`http://${window.location.hostname}:8000/admin/`}
+                    href="/djangoadmin/"
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-1 text-xs text-slate-600 hover:text-blue-700 font-normal py-1 px-2 rounded-md hover:bg-white transition-colors"
@@ -310,12 +310,12 @@ export const Header: FC<HeaderProps> = ({
                   </a>
 
                   <a
-                    href={`http://${window.location.hostname}:5174/`}
+                    href="/operator/"
                     target="_blank"
                     rel="noreferrer"
                     className="flex items-center gap-1 text-xs text-emerald-700 hover:text-emerald-800 font-medium py-1 px-2 rounded-md hover:bg-emerald-50 transition-colors"
                   >
-                    <span>پورتال اپراتورها (پورت ۵۱۷۴)</span>
+                    <span>پورتال اپراتورها</span>
                     <ExternalLink className="w-3 h-3 text-emerald-600" />
                   </a>
                 </div>
