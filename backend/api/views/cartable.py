@@ -3,7 +3,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 
 from workflow.models import (
@@ -33,7 +33,7 @@ class CartableListView(APIView):
     """
     List workflow instances for the cartable, with real SLA state and Dual-Handoff detection.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         tab = request.GET.get('tab', 'all')
@@ -123,7 +123,7 @@ class CartableCreateInstanceView(APIView):
     """
     Starts a new real WorkflowInstance from the Initial Step.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         workflow_id = request.data.get('workflow_id')
@@ -247,7 +247,7 @@ class CartableDetailView(APIView):
     Returns full details for executing tasks:
     Current step, form definition, sections, fields, repeatable groups, and available transitions.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, instance_id):
         instance = get_object_or_404(
@@ -320,7 +320,7 @@ class CartableHandoffAcceptView(APIView):
     """
     Accept physical handoff (Dual-Handoff Protocol).
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, instance_id):
         instance = get_object_or_404(WorkflowInstance, pk=instance_id)
@@ -359,7 +359,7 @@ class CartableHandoffRejectView(APIView):
     """
     Reject physical handoff and return to previous step.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, instance_id):
         instance = get_object_or_404(WorkflowInstance, pk=instance_id)
@@ -389,7 +389,7 @@ class CartableExecuteTransitionView(APIView):
     Execute a transition to the next step (or terminal completion).
     Respects requires_acceptance for Dual-Handoff.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, instance_id):
         instance = get_object_or_404(WorkflowInstance, pk=instance_id)

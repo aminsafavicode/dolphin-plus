@@ -32,6 +32,11 @@ DEBUG = env("DJANGO_DEBUG")
 ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["*"])
 CSRF_TRUSTED_ORIGINS = [
     "https://dolphinplus.srde.ir",
+    "http://dolphinplus.srde.ir",
+    "http://*.srde.ir",
+    "https://*.srde.ir",
+    "http://192.168.0.17",
+    "http://37.255.205.140",
     "http://localhost",
     "http://127.0.0.1",
     "http://localhost:80",
@@ -42,9 +47,25 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:5174",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-]
+] + env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
 
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
+# ---------------------------------------------------------------------------
+# Production security hardening.
+# All flags default to False so local HTTP development keeps working.
+# On the production VPS set these in backend/.env:
+#   DJANGO_SECURE_SSL_REDIRECT=True
+#   DJANGO_SESSION_COOKIE_SECURE=True
+#   DJANGO_CSRF_COOKIE_SECURE=True
+#   DJANGO_HSTS_SECONDS=31536000
+# ---------------------------------------------------------------------------
+SECURE_SSL_REDIRECT = env.bool("DJANGO_SECURE_SSL_REDIRECT", default=False)
+SESSION_COOKIE_SECURE = env.bool("DJANGO_SESSION_COOKIE_SECURE", default=False)
+CSRF_COOKIE_SECURE = env.bool("DJANGO_CSRF_COOKIE_SECURE", default=False)
+SECURE_HSTS_SECONDS = env.int("DJANGO_HSTS_SECONDS", default=0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env.bool("DJANGO_HSTS_INCLUDE_SUBDOMAINS", default=False)
+SECURE_HSTS_PRELOAD = env.bool("DJANGO_HSTS_PRELOAD", default=False)
 
 # Application definition
 

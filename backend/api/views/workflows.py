@@ -1,7 +1,7 @@
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
 
@@ -27,7 +27,7 @@ User = get_user_model()
 class WorkflowListCreateView(generics.ListCreateAPIView):
     queryset = Workflow.objects.all().order_by('-created_at')
     serializer_class = WorkflowSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = super().get_queryset()
@@ -54,7 +54,7 @@ class WorkflowListCreateView(generics.ListCreateAPIView):
 class WorkflowDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Workflow.objects.all()
     serializer_class = WorkflowSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import ValidationError
@@ -125,7 +125,7 @@ class WorkflowDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class WorkflowStepListCreateView(generics.ListCreateAPIView):
     serializer_class = WorkflowStepSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         wf_id = self.kwargs.get('workflow_id')
@@ -141,7 +141,7 @@ class WorkflowStepListCreateView(generics.ListCreateAPIView):
 class WorkflowStepDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = WorkflowStep.objects.all().select_related('assigned_to', 'sla', 'sla__calendar')
     serializer_class = WorkflowStepSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import ValidationError
@@ -176,7 +176,7 @@ class WorkflowStepDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class WorkflowTransitionListCreateView(generics.ListCreateAPIView):
     serializer_class = WorkflowTransitionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         wf_id = self.kwargs.get('workflow_id')
@@ -192,7 +192,7 @@ class WorkflowTransitionListCreateView(generics.ListCreateAPIView):
 class WorkflowTransitionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = WorkflowTransition.objects.all().select_related('from_step', 'to_step', 'reject_to_step')
     serializer_class = WorkflowTransitionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def perform_destroy(self, instance):
         from rest_framework.exceptions import ValidationError
@@ -209,7 +209,7 @@ class WorkflowTransitionDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class WorkflowAccessMatrixView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, workflow_id):
         User = get_user_model()
@@ -455,7 +455,7 @@ class WorkflowToggleStarterView(APIView):
     Dedicated quick-toggle endpoint for granting or revoking workflow initiation (START)
     permission for a specific user.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, workflow_id, user_id):
         wf = get_object_or_404(Workflow, pk=workflow_id)

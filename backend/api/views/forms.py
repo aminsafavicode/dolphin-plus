@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 
 from workflow.models import (
@@ -32,7 +32,7 @@ from api.serializers import (
 
 
 class FormDefinitionDetailView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, workflow_id):
         wf = get_object_or_404(Workflow, pk=workflow_id)
@@ -71,7 +71,7 @@ class FormDefinitionDetailView(APIView):
 
 
 class FormSectionListCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, workflow_id):
         wf = get_object_or_404(Workflow, pk=workflow_id)
@@ -103,7 +103,7 @@ class FormSectionListCreateView(APIView):
 class FormSectionDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = FormSection.objects.all().prefetch_related('fields', 'repeatable_groups')
     serializer_class = FormSectionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     lookup_url_kwarg = 'section_id'
 
     def perform_destroy(self, instance):
@@ -140,7 +140,7 @@ class FormSectionDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class FormFieldCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, workflow_id):
         wf = get_object_or_404(Workflow, pk=workflow_id)
@@ -220,7 +220,7 @@ class FormFieldCreateView(APIView):
 class FormFieldDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = FormField.objects.all().select_related('section', 'repeatable_group', 'choice_static_set', 'choice_lookup_list', 'choice_parent_field')
     serializer_class = FormFieldSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     lookup_url_kwarg = 'field_id'
 
     def perform_destroy(self, instance):
@@ -241,7 +241,7 @@ class FormFieldDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class FormRepeatableGroupCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, workflow_id):
         wf = get_object_or_404(Workflow, pk=workflow_id)
@@ -294,7 +294,7 @@ class FormRepeatableGroupCreateView(APIView):
 class FormRepeatableGroupDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = FormRepeatableGroup.objects.all().prefetch_related('fields')
     serializer_class = FormRepeatableGroupSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
     lookup_url_kwarg = 'group_id'
 
     def perform_destroy(self, instance):
@@ -316,7 +316,7 @@ class FormRepeatableGroupDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class FormPrintSettingsView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request, workflow_id):
         wf = get_object_or_404(Workflow, pk=workflow_id)

@@ -1,5 +1,7 @@
+from django.conf import settings
 from django.contrib.auth import authenticate, login as django_login, logout as django_logout
 from django.contrib.auth import get_user_model
+from django.middleware.csrf import get_token
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -54,6 +56,8 @@ class AuthLoginView(APIView):
             return Response({'error': 'حساب کاربری شما غیرفعال شده است. لطفاً با راهبر تماس بگیرید.'}, status=status.HTTP_403_FORBIDDEN)
 
         django_login(request, user)
+        # Ensure the CSRF cookie is issued so authenticated AJAX calls can send X-CSRFToken.
+        get_token(request)
         return Response({
             'success': True,
             'user': serialize_user(user),
@@ -66,6 +70,12 @@ class AuthQuickLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
+        if not settings.DEBUG:
+            return Response(
+                {'error': 'این اندپوینت فقط در محیط توسعه در دسترس است.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         user_id = request.data.get('user_id')
         username = request.data.get('username')
 
@@ -98,6 +108,8 @@ class AuthMeView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        # (Re)issue the CSRF cookie so a resumed session can perform POSTs safely.
+        get_token(request)
         if request.user.is_authenticated:
             return Response({
                 'authenticated': True,

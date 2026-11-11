@@ -1,7 +1,7 @@
 services:
 
   postgres:
-    image: postgres:16
+    image: postgres:17
     container_name: dolphin-postgres
     restart: unless-stopped
     environment:
@@ -10,7 +10,9 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dolphin_password}
       TZ: ${TZ:-Asia/Tehran}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Bind to loopback only: Docker bypasses UFW, so a 0.0.0.0 binding would
+      # expose the database to the whole internet on a public VPS.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -26,7 +28,7 @@ services:
     container_name: dolphin-redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -38,6 +40,7 @@ services:
       - dolphin-network
 
   web:
+    image: dophinplus-web:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -45,7 +48,8 @@ services:
     restart: unless-stopped
     command: ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
     ports:
-      - "8000:8000"
+      # Daphne must be reachable only through the nginx gateway; keep it off the public interface.
+      - "127.0.0.1:8000:8000"
     env_file:
       - ./backend/.env
     environment:
@@ -54,6 +58,8 @@ services:
       - RUN_MIGRATIONS=true
       - COLLECT_STATIC=true
       - DJANGO_ALLOWED_HOSTS=*
+      - PG_DUMP_PATH=/usr/lib/postgresql/17/bin/pg_dump
+      - PG_RESTORE_PATH=/usr/lib/postgresql/17/bin/pg_restore
     volumes:
       - ./backend:/app
       - static_data:/app/staticfiles
@@ -68,6 +74,7 @@ services:
       - dolphin-network
 
   celery_worker:
+    image: dophinplus-web:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -81,6 +88,8 @@ services:
       - REDIS_HOST=redis
       - RUN_MIGRATIONS=false
       - COLLECT_STATIC=false
+      - PG_DUMP_PATH=/usr/lib/postgresql/17/bin/pg_dump
+      - PG_RESTORE_PATH=/usr/lib/postgresql/17/bin/pg_restore
     volumes:
       - ./backend:/app
       - media_data:/app/media
@@ -96,6 +105,7 @@ services:
       - dolphin-network
 
   celery_beat:
+    image: dophinplus-web:latest
     build:
       context: ./backend
       dockerfile: Dockerfile

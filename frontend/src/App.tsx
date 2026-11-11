@@ -30,6 +30,7 @@ export function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [usersList, setUsersList] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(() => {
     try {
       return localStorage.getItem('dolphin_sidebar_collapsed') === 'true';
@@ -68,16 +69,51 @@ export function App() {
         const superuser = users.find((u: any) => u.is_superuser) || users[0];
         setCurrentUser(superuser);
       }
-    } catch (err) {
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 401 || status === 403) {
+        const nextUrl = encodeURIComponent((window.location.pathname || '/admin/') + window.location.search);
+        window.location.href = `/accounts/login/?next=${nextUrl}`;
+        return;
+      }
       console.error(err);
     }
   };
 
   useEffect(() => {
+    let active = true;
+    api.getMe()
+      .then((res) => {
+        if (!active) return;
+        if (!res?.authenticated) {
+          const nextUrl = encodeURIComponent((window.location.pathname || '/admin/') + window.location.search);
+          window.location.href = `/accounts/login/?next=${nextUrl}`;
+          return;
+        }
+        if (res.user) {
+          setCurrentUser(res.user);
+        }
+        setAuthChecked(true);
+      })
+      .catch((err) => {
+        if (!active) return;
+        const status = err?.response?.status;
+        if (status === 401 || status === 403) {
+          const nextUrl = encodeURIComponent((window.location.pathname || '/admin/') + window.location.search);
+          window.location.href = `/accounts/login/?next=${nextUrl}`;
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!authChecked) return;
     loadData();
     const interval = setInterval(loadData, 10000); // 10s live polling
     return () => clearInterval(interval);
-  }, [searchQuery]);
+  }, [authChecked, searchQuery]);
 
   // Handoff Accept Handler (Accept physical custody)
   const handleAcceptHandoff = async (taskId: string) => {
@@ -147,6 +183,14 @@ export function App() {
 
   const pendingCount = dashboardStats?.pending_handoff_count ?? tasks.filter((t) => t.status === 'pending_handoff').length;
   const activeProcessesCount = dashboardStats?.active_tasks_count ?? tasks.filter((t) => t.status === 'active').length;
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-[#f8fafc] flex items-center justify-center text-slate-500 text-sm font-sans" dir="rtl">
+        در حال بررسی نشست کاربری و هدایت به صفحه ورود...
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f8fafc] flex flex-row text-slate-800 font-sans" dir="rtl">

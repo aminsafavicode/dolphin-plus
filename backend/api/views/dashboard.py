@@ -6,7 +6,7 @@ from django.db import connection
 from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 
 from workflow.models import (
     Workflow,
@@ -26,7 +26,7 @@ class DashboardStatsView(APIView):
     Returns live, real enterprise metrics for the Dolphin Flow React dashboard.
     No mockups - everything queries PostgreSQL and the host environment directly.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         now = timezone.now()

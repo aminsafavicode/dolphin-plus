@@ -78,6 +78,7 @@ cp backend/.env.example backend/.env
 > با دستور `nano .env` یا `nano backend/.env` می‌توانید تنظیمات را بازبینی کنید:
 > - اطمینان حاصل کنید `GATEWAY_PORT=80` است.
 > - متغیر `DJANGO_ALLOWED_HOSTS=*` باشد.
+> - **مهم:** در `backend/.env` مقدار `DJANGO_DEBUG=False` باشد (در محیط production).
 > - رمز عبور دیتابیس `POSTGRES_PASSWORD` را در صورت تمایل شخصی‌سازی کنید.
 
 ---
@@ -125,6 +126,9 @@ sudo ufw allow 80/tcp   # پورت ورود وب
 sudo ufw --force enable
 ```
 
+> [!IMPORTANT]
+> **نکته امنیتی حیاتی:** Docker قوانین UFW را دور می‌زند (مستقیم با iptables کار می‌کند). به همین دلیل در `docker-compose.yml` پورت‌های PostgreSQL، Redis و Daphne فقط روی `127.0.0.1` Publish شده‌اند تا از اینترنت در دسترس نباشند. این تنظیمات را تغییر ندهید و پورت‌های داخلی را روی `0.0.0.0` باز نکنید.
+
 اکنون سامانه از طریق آدرس `http://<IP_SERVER>` در دسترس است!
 
 ---
@@ -134,7 +138,7 @@ sudo ufw --force enable
 اگر از قبل فایل پشتیبان دیتابیس (مانند `dolphinplus.backup`) با فرمت باینری `pg_dump -Fc` دارید، به روش زیر می‌توانید آن را بازگردانی کنید:
 
 ### نکته فنی بسیار مهم:
-فایل‌های بکاپ جدید PostgreSQL 17 با فرمت اختصاصی Dump Version 1.16 ایجاد می‌شوند. برای ریستور بدون خطا، از کانتینر PostgreSQL 17 در شبکه داکر پروژه استفاده می‌کنیم:
+سرویس `dolphin-postgres` اکنون بر روی **PostgreSQL 17** اجرا می‌شود و ایمیج بک‌اند نیز `pg_dump`/`pg_restore` نسخه ۱۷ را از مخزن رسمی PGDG نصب دارد؛ بنابراین ریستور بدون کانتینر اضافه و مستقیماً داخل کانتینر دیتابیس پروژه انجام می‌شود:
 
 ```bash
 # ۱. بستن اتصالات قبلی و ساخت دیتابیس تمیز:
@@ -142,10 +146,9 @@ docker exec dolphin-postgres psql -U dolphin -d postgres -c "SELECT pg_terminate
 docker exec dolphin-postgres psql -U dolphin -d postgres -c "DROP DATABASE IF EXISTS dolphinflow;"
 docker exec dolphin-postgres psql -U dolphin -d postgres -c "CREATE DATABASE dolphinflow;"
 
-# ۲. ریستور کردن مستقیم فایل بکاپ داخل دیتابیس:
-docker run --rm -i --network dolphin-plus_dolphin-network \
-  -e PGPASSWORD=dolphin_password postgres:17 \
-  pg_restore -h postgres -U dolphin -d dolphinflow --no-owner --no-privileges < dolphinplus.backup
+# ۲. ریستور کردن مستقیم فایل بکاپ داخل کانتینر دیتابیس پروژه:
+docker cp dolphinplus.backup dolphin-postgres:/tmp/dolphinplus.backup
+docker exec dolphin-postgres pg_restore -U dolphin -d dolphinflow --no-owner --no-privileges /tmp/dolphinplus.backup
 
 # ۳. اعمال خودکار مایگریشن‌های جدید پروژه روی دیتابیس ریستور شده:
 docker exec dolphin-web python manage.py migrate

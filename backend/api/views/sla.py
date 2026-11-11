@@ -3,7 +3,7 @@ from django.db import transaction
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 
 from workflow.models import (
     BusinessCalendar,
@@ -26,17 +26,17 @@ from api.serializers import (
 class BusinessCalendarListCreateView(generics.ListCreateAPIView):
     queryset = BusinessCalendar.objects.all().prefetch_related('weekly_schedules__intervals', 'exceptions__intervals').order_by('id')
     serializer_class = BusinessCalendarSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 class BusinessCalendarDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = BusinessCalendar.objects.all().prefetch_related('weekly_schedules__intervals', 'exceptions__intervals')
     serializer_class = BusinessCalendarSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 class WeeklyScheduleUpdateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def put(self, request, schedule_id):
         sched = get_object_or_404(WeeklySchedule, pk=schedule_id)
@@ -60,7 +60,7 @@ class CalendarBulkScheduleView(APIView):
     """
     Quickly set multiple days with identical shifts (e.g. Saturday-Wednesday 08:00 to 17:00)
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, calendar_id):
         calendar = get_object_or_404(BusinessCalendar, pk=calendar_id)
@@ -88,7 +88,7 @@ class CalendarBulkScheduleView(APIView):
 
 
 class CalendarExceptionCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, calendar_id):
         calendar = get_object_or_404(BusinessCalendar, pk=calendar_id)
@@ -122,11 +122,11 @@ class CalendarExceptionCreateView(APIView):
 class CalendarExceptionDeleteView(generics.DestroyAPIView):
     queryset = CalendarException.objects.all()
     serializer_class = CalendarExceptionSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 class WorkflowStepSLAListCreateView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         slas = WorkflowStepSLA.objects.all().select_related('step__workflow', 'calendar').order_by('id')
@@ -182,4 +182,4 @@ class WorkflowStepSLAListCreateView(APIView):
 class WorkflowStepSLADetailView(generics.DestroyAPIView):
     queryset = WorkflowStepSLA.objects.all()
     serializer_class = WorkflowStepSLASerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]

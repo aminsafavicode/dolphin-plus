@@ -1,6 +1,6 @@
 from django.db import transaction
 from rest_framework import generics
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from workflow.models import DeviceType, DeviceModel, Device, DeviceIdentifier
 from api.serializers import (
@@ -14,13 +14,13 @@ from api.serializers import (
 class DeviceTypeListCreateView(generics.ListCreateAPIView):
     queryset = DeviceType.objects.all().order_by('id')
     serializer_class = DeviceTypeSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 class DeviceTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = DeviceType.objects.all()
     serializer_class = DeviceTypeSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def perform_destroy(self, instance):
         if instance.models.exists():
@@ -33,13 +33,13 @@ class DeviceTypeDetailView(generics.RetrieveUpdateDestroyAPIView):
 class DeviceModelListCreateView(generics.ListCreateAPIView):
     queryset = DeviceModel.objects.all().select_related('device_type').order_by('id')
     serializer_class = DeviceModelSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 class DeviceModelDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = DeviceModel.objects.all().select_related('device_type')
     serializer_class = DeviceModelSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def perform_destroy(self, instance):
         if instance.devices.exists():
@@ -52,13 +52,13 @@ class DeviceModelDetailView(generics.RetrieveUpdateDestroyAPIView):
 class DeviceListCreateView(generics.ListCreateAPIView):
     queryset = Device.objects.all().select_related('device_model', 'device_model__device_type').prefetch_related('identifiers').order_by('-id')
     serializer_class = DeviceSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
 
 class DeviceDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Device.objects.all().select_related('device_model', 'device_model__device_type').prefetch_related('identifiers')
     serializer_class = DeviceSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def perform_destroy(self, instance):
         if instance.workflow_instances.exists():
@@ -72,7 +72,7 @@ class DeviceDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class DeviceIdentifierListCreateView(generics.ListCreateAPIView):
     serializer_class = DeviceIdentifierSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         qs = DeviceIdentifier.objects.all().order_by('id')
@@ -85,4 +85,4 @@ class DeviceIdentifierListCreateView(generics.ListCreateAPIView):
 class DeviceIdentifierDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = DeviceIdentifier.objects.all()
     serializer_class = DeviceIdentifierSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]

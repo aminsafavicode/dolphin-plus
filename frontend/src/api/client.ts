@@ -9,6 +9,32 @@ export const apiClient = axios.create({
   timeout: 15000,
 });
 
+// ---------------------------------------------------------------------------
+// CSRF protection: the backend uses Django session authentication, which
+// enforces CSRF checks on every authenticated mutating request. Read the
+// csrftoken cookie (issued by /api/auth/login/ and /api/auth/me/) and attach
+// it to every unsafe request.
+// ---------------------------------------------------------------------------
+function getCsrfToken(): string {
+  try {
+    const match = document.cookie.match(/(?:^|; )csrftoken=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : '';
+  } catch {
+    return '';
+  }
+}
+
+apiClient.interceptors.request.use((config) => {
+  const method = (config.method || 'get').toLowerCase();
+  if (['post', 'put', 'patch', 'delete'].includes(method)) {
+    const token = getCsrfToken();
+    if (token) {
+      config.headers.set('X-CSRFToken', token);
+    }
+  }
+  return config;
+});
+
 export const api = {
   // Auth
   login: async (username: string, password?: string) => {

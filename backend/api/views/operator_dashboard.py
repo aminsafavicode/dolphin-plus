@@ -4,7 +4,7 @@ from django.utils import timezone
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from django.contrib.auth import get_user_model
 
 from operator_panel.dashboard_services import DashboardService
@@ -20,20 +20,19 @@ logger = logging.getLogger(__name__)
 def _get_target_user(request):
     """
     Resolves the operator user for the dashboard:
-    1. If ?user_id is passed, use that user (superusers/admins can view any user's workspace).
-    2. Else if request.user is authenticated, use request.user.
-    3. Else fallback to the first active operator/user.
+    1. If ?user_id is passed AND the caller is a superuser, use that user
+       (admins may inspect any user's workspace).
+    2. Otherwise always fall back to request.user. Anonymous/unprivileged
+       callers may NEVER select another user's identity (IDOR protection).
     """
     user_id = request.GET.get('user_id')
-    if user_id and str(user_id).isdigit():
+    if user_id and str(user_id).isdigit() and request.user.is_authenticated and request.user.is_superuser:
         target = User.objects.filter(pk=int(user_id)).first()
         if target:
             return target
     if request.user and request.user.is_authenticated:
         return request.user
-    # Fallback to an operator or first user
-    operator = User.objects.filter(is_superuser=False).first()
-    return operator or User.objects.first()
+    return None
 
 
 class OperatorDashboardView(APIView):
@@ -47,7 +46,7 @@ class OperatorDashboardView(APIView):
     - active_processes: Active instances with graphic progress tracker steps
     - startable_workflows: Workflows permitted to start
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         user = _get_target_user(request)
@@ -195,7 +194,7 @@ class OperatorHideProcessView(APIView):
     """
     Hides an unfinished process from the operator's personal dashboard.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, instance_id):
         user = _get_target_user(request)
@@ -208,7 +207,7 @@ class OperatorRestoreProcessView(APIView):
     """
     Restores a hidden process back to the operator's dashboard.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, instance_id):
         user = _get_target_user(request)

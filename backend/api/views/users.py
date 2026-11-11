@@ -2,7 +2,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAdminUser
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 
@@ -21,13 +21,13 @@ User = get_user_model()
 class UserListCreateView(generics.ListCreateAPIView):
     queryset = User.objects.all().select_related('job').prefetch_related('groups', 'workflow_memberships__workflow').order_by('id')
     serializer_class = UserSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
 
 class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = User.objects.all().select_related('job').prefetch_related('groups', 'workflow_memberships__workflow')
     serializer_class = UserSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
     def perform_destroy(self, instance):
         if instance.is_superuser and User.objects.filter(is_superuser=True).count() <= 1:
@@ -36,7 +36,7 @@ class UserDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class UserSetPasswordView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
     def post(self, request, user_id):
         user = get_object_or_404(User, pk=user_id)
@@ -51,30 +51,30 @@ class UserSetPasswordView(APIView):
 class JobListCreateView(generics.ListCreateAPIView):
     queryset = Job.objects.all().prefetch_related('users').order_by('name')
     serializer_class = JobSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
 
 class JobDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Job.objects.all()
     serializer_class = JobSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
 
 class GroupListCreateView(generics.ListCreateAPIView):
     queryset = Group.objects.all().prefetch_related('user_set').order_by('name')
     serializer_class = GroupSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
 
 class GroupDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Group.objects.all()
     serializer_class = GroupSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
 
 class WorkflowMembershipListCreateView(generics.ListCreateAPIView):
     serializer_class = WorkflowMembershipSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
     def get_queryset(self):
         qs = WorkflowMembership.objects.all().select_related('workflow', 'user').order_by('id')
@@ -123,7 +123,7 @@ class WorkflowMembershipListCreateView(generics.ListCreateAPIView):
 class WorkflowMembershipDeleteView(generics.DestroyAPIView):
     queryset = WorkflowMembership.objects.all()
     serializer_class = WorkflowMembershipSerializer
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
     def perform_destroy(self, instance):
         from workflow.models import WorkflowPermission

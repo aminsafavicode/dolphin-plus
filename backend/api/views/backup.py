@@ -5,7 +5,7 @@ from django.db import connection
 from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAdminUser
 from rest_framework import status
 from django.contrib.auth import get_user_model
 
@@ -27,7 +27,7 @@ User = get_user_model()
 
 
 class BackupStatusView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
     def get(self, request):
         backups = Backup.objects.all().order_by('-created_at')[:20]
@@ -88,7 +88,7 @@ class BackupStatusView(APIView):
 
 
 class BackupTriggerView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
     def post(self, request):
         includes_media = request.data.get('includes_media', False)
@@ -123,7 +123,7 @@ class BackupTriggerView(APIView):
 
 
 class BackupDeleteView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminUser]
 
     def delete(self, request, backup_id):
         backup = get_object_or_404(Backup, pk=backup_id)
