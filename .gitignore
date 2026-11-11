@@ -20,7 +20,9 @@ backend/backups/
 # Environment Variables
 .env
 .env.*
+.deploy.env
 !.env.example
+!.deploy.env.example
 
 # Node
 node_modules/

@@ -17,7 +17,7 @@
 | **`http://<SERVER_IP>/api/`** | **Django REST API** | کلیه اندپوینت‌های REST بک‌اند مجهز به Rate-Limiting ضد Brute-Force |
 | **`http://<SERVER_IP>/ws/`** | **Daphne ASGI** | وب‌سوکت‌های زنده و اعلانات با ارتقای اتوماتیک پروتکل |
 | **`http://<SERVER_IP>/static/`** | **Nginx Direct Delivery** | سرو مستقیم و پرسرعت فایل‌های استاتیک و فونت‌های فارسی (YekanBakh) |
-| **`http://<SERVER_IP>/media/`** | **Nginx Direct Delivery** | سرو مستقیم مدیا و فایل‌های پیوست بدون درگیر کردن منابع پایتون |
+| **`http://<SERVER_IP>/media/branding/`** | **Nginx Direct Delivery** | سرو مستقیم لوگوها و فایل‌های برندینگ عمومی؛ سایر فایل‌های `/media/` برای امنیت توسط Django و پس از احراز هویت سرو می‌شوند |
 
 ---
 
@@ -188,13 +188,46 @@ docker compose restart
 docker compose down
 ```
 
-### آپدیت پروژه از گیت:
+### آپدیت و دیپلوی مداوم تغییرات جدید (پیشنهادی برای سرور شرکت):
+از آنجا که سرور شرکت محدودیت دسترسی مستقیم به GitHub/PyPI/Docker Hub دارد، اسکریپت [`deploy.sh`](./deploy.sh) کل فرآیند دیپلوی امن از سیستم شما به VPS را در یک دستور انجام می‌دهد:
+
+```bash
+# ۱. فقط یک بار در سیستم خودتان فایل تنظیمات را بسازید (این فایل در git ذخیره نمی‌شود):
+cp .deploy.env.example .deploy.env
+# سپس داخل .deploy.env مقادیر DEPLOY_HOST، DEPLOY_PORT و DEPLOY_USER را پر کنید.
+
+# ۲. در هر تغییر کد (بک‌اند، فرانت‌اند یا Nginx) فقط این دستور را بزنید:
+./deploy.sh
+```
+
+**گزینه‌های پرکاربرد `./deploy.sh`:**
+- فقط تغییر بک‌اند/Nginx دارید و نیازی به بیلد مجدد React نیست:
+  ```bash
+  ./deploy.sh --skip-frontend
+  ```
+- هم‌زمان کامیت‌ها را روی GitHub هم Push کند و بعد روی VPS دیپلوی بگیرد:
+  ```bash
+  ./deploy.sh --git-push
+  ```
+- پکیج پایتونی جدید به `backend/requirements/base.txt` اضافه شده یا `Dockerfile` تغییر کرده:
+  ```bash
+  ./deploy.sh --rebuild-image
+  ```
+- پیش‌نمایش تغییرات قبل از اعمال روی سرور (بدون تغییر روی VPS):
+  ```bash
+  ./deploy.sh --dry-run
+  ```
+
+> [!NOTE]
+> اسکریپت `deploy.sh` فایل‌های محیطی `.env` سرور، دیتابیس، فایل‌های آپلودشده (`media`) و بکاپ‌های سرور را دست‌نخورده نگه می‌دارد، فرانت‌اند را تمیز بیلد می‌کند، مایگریشن‌ها و `collectstatic` را اعمال کرده و در پایان تمام اندپوینت‌ها را خودکار تست (Smoke Test) می‌کند.
+
+### آپدیت روی سرورهای دارای اینترنت آزاد (مستقیم از Git):
 ```bash
 # ۱. دریافت آخرین تغییرات
 git pull
 
 # ۲. بیلد مجدد فرانت‌اند (در صورت وجود تغییرات در UI)
-docker run --rm -v "$(pwd)/frontend:/app" -w /app node:20-alpine sh -c "npm install && npm run build:admin"
+docker run --rm -v "$(pwd)/frontend:/app" -w /app node:20-alpine sh -c "npm install && npm run build"
 
 # ۳. اعمال و بروزرسانی کانتینرها بدون قطعی دیتابیس
 docker compose up -d --build
